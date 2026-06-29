@@ -23,6 +23,9 @@
   let selectedFilePath = $state('');
   let selectedRange = $state(null);
   let expandedTreeDirs = $state(new Set(['src', 'src/lib', 'src-tauri', 'src-tauri/src']));
+  let stepRangePins = $state({});
+  let showPinList = $state(false);
+  let pinEligibleStepKey = $state('');
   let timer = null;
   let lastSyncedSourceKey = '';
   let diagramWrap;
@@ -36,6 +39,7 @@
   const relationKind = (relation) => RELATION_KINDS[relation.kind] ?? RELATION_KINDS.call;
   const stepById = (flowId, stepId) => flowById(flowId)?.steps.find((step) => step.id === stepId) ?? null;
   const boardNodeKey = (role, flowId, stepId) => `${role}:${flowId}::${stepId}`;
+  const PIN_STORAGE_KEY = 'mindphaseLearning.stepRangePins.v1';
 
   let currentFlow = $derived(flowById(selectedFlowId) ?? FLOWS[0]);
   let selectedStepIndex = $derived(Math.max(0, currentFlow.steps.findIndex((step) => step.id === selectedStepId)));
@@ -58,9 +62,24 @@
   let fileTreeRows = $derived(visibleFileTreeRows(codebaseGraph?.tree));
   let selectedFile = $derived(codebaseFileByRepoPath(selectedFilePath) ?? codebaseGraph?.files?.[0] ?? null);
   let selectedFileLines = $derived(selectedFile?.lines ?? []);
+  let pinnableRanges = $derived(collectPinnableStepRanges());
+  let pinnedRanges = $derived(Object.values(stepRangePins).filter((pin) => isKnownPinnableRange(pin)));
+  let pinSummary = $derived({ pinned: pinnedRanges.length, total: pinnableRanges.length });
+  let currentStepPinKey = $derived(currentStep ? `${currentFlow.id}::${currentStep.id}` : '');
+  let currentPinRange = $derived(
+    currentStep && pinEligibleStepKey === currentStepPinKey ? pinnableRangeForStep(currentFlow.id, currentStep.id) : null
+  );
+  let currentPinId = $derived(currentPinRange ? pinIdForRange(currentPinRange) : '');
+  let isCurrentRangePinned = $derived(Boolean(currentPinId && stepRangePins[currentPinId]));
+  let pinList = $derived(
+    pinnedRanges
+      .slice()
+      .sort((a, b) => b.pinnedAt.localeCompare(a.pinnedAt) || a.repoPath.localeCompare(b.repoPath))
+  );
 
   onMount(() => {
     loadUrlSelection();
+    loadStepRangePins();
     loadCodebaseGraph();
     const onResize = () => void scheduleDrawEdges();
     const onKeydown = (event) => handleKeydown(event);
@@ -149,8 +168,18 @@
 
   function buildBoardProjection(flow) {
     const crossEdges = crossFunctionEdgesForFlow(flow.id);
-    const rows = [];
-    const nodes = [];
+    const sequenceEdges = flow.steps.slice(0, -1).map((step, index) => {
+      const nextStep = flow.steps[index + 1];
+      return {
+        id: `sequence:${flow.id}:${step.id}->${nextStep.id}`,
+        kind: 'sequence',
+        fromFlow: flow.id,
+        fromStep: step.id,
+        toFlow: flow.id,
+        toStep: nextStep.id
+      };
+    });
+    const slots = [];
     const seen = new Set();
 
     function addNode(flowId, stepId, role, edge = null) {
@@ -160,16 +189,22 @@
       const key = boardNodeKey(role, flowId, stepId);
       if (seen.has(key)) return;
       seen.add(key);
-      rows.push({ flowId, stepId, role, edge });
       const laneIndex = Math.max(0, LANES.findIndex((lane) => lane.id === step.lane));
-      nodes.push({ key, role, flowId, stepId, flow: nodeFlow, step, laneIndex, row: rows.length });
+      slots.push({ key, role, flowId, stepId, flow: nodeFlow, step, laneIndex });
     }
 
     crossEdges.filter((edge) => edge.toFlow === flow.id).forEach((edge) => addNode(edge.fromFlow, edge.fromStep, 'incoming', edge));
     flow.steps.forEach((step) => addNode(flow.id, step.id, 'current'));
     crossEdges.filter((edge) => edge.fromFlow === flow.id).forEach((edge) => addNode(edge.toFlow, edge.toStep, 'outgoing', edge));
 
-    return { nodes, edges: crossEdges, rowCount: Math.max(rows.length, flow.steps.length) };
+    const columnCount = Math.max(slots.length, 1);
+    const nodes = slots.map((node, index) => ({
+      ...node,
+      column: index + 1,
+      row: node.laneIndex + 1
+    }));
+
+    return { nodes, edges: [...sequenceEdges, ...crossEdges], rowCount: LANES.length, columnCount };
   }
 
   function buildFilteredGroups(queryText) {
@@ -209,13 +244,14 @@
     return [...groups.entries()].map(([group, items]) => ({ group, items }));
   }
 
-  function selectFlowStep(flowId, stepId = '') {
+  function selectFlowStep(flowId, stepId = '', options = {}) {
     const flow = flowById(flowId);
     if (!flow) return;
     stopTimer();
     selectedSymbolId = '';
     selectedFlowId = flow.id;
     selectedStepId = stepId && stepById(flow.id, stepId) ? stepId : flow.steps[0]?.id;
+    pinEligibleStepKey = options.fromStepNode ? `${flow.id}::${selectedStepId}` : '';
     filter = '';
     sidebarOpen = false;
     updateUrlSelection();
@@ -226,13 +262,22 @@
     if (flow) selectFlowStep(flow.id);
   }
 
-  function setStepByIndex(index) {
+  function setStepByIndex(index, options = {}) {
     const step = currentFlow.steps[Math.max(0, Math.min(currentFlow.steps.length - 1, index))];
     if (!step) return;
     selectedStepId = step.id;
     selectedSymbolId = '';
+    pinEligibleStepKey = options.fromStepNode ? `${currentFlow.id}::${step.id}` : '';
     updateUrlSelection();
     if (playing) restartTimer();
+  }
+
+  function selectBoardStepNode(node) {
+    if (node.role === 'current') {
+      setStepByIndex(node.step.index, { fromStepNode: true });
+    } else {
+      selectFlowStep(node.flowId, node.stepId, { fromStepNode: true });
+    }
   }
 
   function nextStep() {
@@ -296,6 +341,182 @@
     selectedSymbolId = symbolId;
     sidebarOpen = false;
     focusSourceReference(sourceReferenceForSymbol(symbol), { updateUrl: true });
+  }
+
+  function loadStepRangePins() {
+    try {
+      const raw = window.localStorage.getItem(PIN_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      stepRangePins = normalizeStoredPins(parsed);
+    } catch (error) {
+      console.warn('[mindphase-learning] unable to load step range pins', error);
+      stepRangePins = {};
+    }
+  }
+
+  function persistStepRangePins(nextPins) {
+    stepRangePins = nextPins;
+    try {
+      window.localStorage.setItem(PIN_STORAGE_KEY, JSON.stringify({ version: 1, pins: nextPins }));
+    } catch (error) {
+      console.warn('[mindphase-learning] unable to persist step range pins', error);
+    }
+  }
+
+  function normalizeStoredPins(value) {
+    const source = value?.pins && typeof value.pins === 'object' ? value.pins : {};
+    const next = {};
+    for (const pin of Object.values(source)) {
+      const normalized = normalizePinRecord(pin);
+      if (!normalized) continue;
+      next[pinIdForRange(normalized)] = normalized;
+    }
+    return next;
+  }
+
+  function normalizePinRecord(pin) {
+    if (!pin || typeof pin !== 'object') return null;
+    const flow = flowById(pin.flowId);
+    const step = stepById(pin.flowId, pin.stepId);
+    const repoPath = String(pin.repoPath || '');
+    const startLine = Number(pin.startLine);
+    const endLine = Number(pin.endLine);
+    if (!flow || !step || !repoPath || !Number.isInteger(startLine) || !Number.isInteger(endLine)) return null;
+    if (startLine < 1 || endLine < startLine) return null;
+    return {
+      flowId: flow.id,
+      stepId: step.id,
+      repoPath,
+      startLine,
+      endLine,
+      symbolId: String(pin.symbolId || ''),
+      title: String(pin.title || `${flow.title} / ${step.title}`),
+      pinnedAt: typeof pin.pinnedAt === 'string' ? pin.pinnedAt : new Date().toISOString()
+    };
+  }
+
+  function collectPinnableStepRanges() {
+    if (!codebaseGraph?.files?.length) return [];
+    return FLOWS.flatMap((flow) =>
+      flow.steps
+        .map((step) => pinnableRangeForStep(flow.id, step.id))
+        .filter(Boolean)
+    );
+  }
+
+  function pinnableRangeForStep(flowId, stepId) {
+    const flow = flowById(flowId);
+    const step = stepById(flowId, stepId);
+    if (!flow || !step) return null;
+    const ref = sourceReference(step);
+    const file = codebaseFileByRepoPath(ref?.repoPath);
+    if (!file) return null;
+    const startLine = Math.max(1, Math.min(Number(ref.startLine) || 1, file.lineCount || 1));
+    const endLine = Math.max(startLine, Math.min(Number(ref.endLine) || startLine, file.lineCount || startLine));
+    return {
+      flowId: flow.id,
+      stepId: step.id,
+      repoPath: file.repoPath,
+      startLine,
+      endLine,
+      symbolId: ref.symbolId || '',
+      title: `${flow.title} / ${step.title}`,
+      pinnedAt: ''
+    };
+  }
+
+  function pinIdForRange(range) {
+    return `${range.flowId}::${range.stepId}::${range.repoPath}:${range.startLine}-${range.endLine}`;
+  }
+
+  function isKnownPinnableRange(pin) {
+    return Boolean(pin && pinnableRanges.some((range) => pinIdForRange(range) === pinIdForRange(pin)));
+  }
+
+  function toggleCurrentRangePin() {
+    if (!currentPinRange) return;
+    const pinId = pinIdForRange(currentPinRange);
+    const next = { ...stepRangePins };
+    if (next[pinId]) {
+      delete next[pinId];
+    } else {
+      next[pinId] = { ...currentPinRange, pinnedAt: new Date().toISOString() };
+    }
+    persistStepRangePins(next);
+  }
+
+  function unpinRange(pin) {
+    const pinId = pinIdForRange(pin);
+    if (!stepRangePins[pinId]) return;
+    const next = { ...stepRangePins };
+    delete next[pinId];
+    persistStepRangePins(next);
+  }
+
+  function jumpToPin(pin) {
+    selectFlowStep(pin.flowId, pin.stepId);
+    focusSourceReference({ ...pin, exact: true }, { updateUrl: true });
+    showPinList = false;
+  }
+
+  function coverageForTreeNode(node) {
+    if (!node) return { status: 'none', label: 'No pinned step ranges' };
+    if (node.kind === 'file') return coverageForFile(node.path);
+    return coverageForDirectory(node);
+  }
+
+  function coverageForFile(repoPath) {
+    const ranges = pinnableRanges.filter((range) => range.repoPath === repoPath);
+    if (!ranges.length) return { status: 'none', label: 'No pinnable step ranges' };
+    const pinned = ranges.filter((range) => stepRangePins[pinIdForRange(range)]);
+    if (!pinned.length) return { status: 'none', label: `${ranges.length} pinnable ranges` };
+    const file = codebaseFileByRepoPath(repoPath);
+    const fullLineCoverage = Boolean(file?.lineCount && rangesCoverLineSpan(pinned, 1, file.lineCount));
+    if (fullLineCoverage) return { status: 'full', label: `All ${file.lineCount} source lines covered by pins` };
+    if (pinned.length === ranges.length) return { status: 'all', label: `All ${ranges.length} step ranges pinned` };
+    return { status: 'partial', label: `${pinned.length} / ${ranges.length} step ranges pinned` };
+  }
+
+  function coverageForDirectory(node) {
+    const filePaths = filePathsUnderTreeNode(node);
+    const childCoverages = filePaths.map(coverageForFile).filter((coverage) => coverage.status !== 'none');
+    if (!childCoverages.length) return { status: 'none', label: 'No pinned step ranges' };
+    if (childCoverages.every((coverage) => coverage.status === 'full')) return { status: 'full', label: 'All child source lines covered by pins' };
+    if (childCoverages.every((coverage) => coverage.status === 'all' || coverage.status === 'full')) return { status: 'all', label: 'All child step ranges pinned' };
+    return { status: 'partial', label: 'Some child step ranges pinned' };
+  }
+
+  function filePathsUnderTreeNode(node) {
+    if (!node) return [];
+    if (node.kind === 'file') return [node.path];
+    return (node.children || []).flatMap(filePathsUnderTreeNode);
+  }
+
+  function rangesCoverLineSpan(ranges, startLine, endLine) {
+    const sorted = ranges
+      .map((range) => ({ startLine: Number(range.startLine), endLine: Number(range.endLine) }))
+      .filter((range) => Number.isInteger(range.startLine) && Number.isInteger(range.endLine))
+      .sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine);
+    let coveredUntil = startLine - 1;
+    for (const range of sorted) {
+      if (range.startLine > coveredUntil + 1) return false;
+      coveredUntil = Math.max(coveredUntil, range.endLine);
+      if (coveredUntil >= endLine) return true;
+    }
+    return coveredUntil >= endLine;
+  }
+
+  function sourceLinePinInfo(lineNumber) {
+    if (!selectedFile?.repoPath) return null;
+    const pins = pinnedRanges.filter(
+      (pin) => pin.repoPath === selectedFile.repoPath && pin.startLine <= lineNumber && lineNumber <= pin.endLine
+    );
+    if (!pins.length) return null;
+    return {
+      count: pins.length,
+      title: pins.map((pin) => pin.title).join(', ')
+    };
   }
 
   async function loadCodebaseGraph() {
@@ -368,9 +589,18 @@
         </linearGradient>
       </defs>`;
     const paths = boardProjection.edges.map((edge) => {
-      const incoming = edge.toFlow === currentFlow.id;
-      const fromKey = incoming ? boardNodeKey('incoming', edge.fromFlow, edge.fromStep) : boardNodeKey('current', edge.fromFlow, edge.fromStep);
-      const toKey = incoming ? boardNodeKey('current', edge.toFlow, edge.toStep) : boardNodeKey('outgoing', edge.toFlow, edge.toStep);
+      const sequence = edge.kind === 'sequence';
+      const incoming = !sequence && edge.toFlow === currentFlow.id;
+      const fromKey = sequence
+        ? boardNodeKey('current', edge.fromFlow, edge.fromStep)
+        : incoming
+          ? boardNodeKey('incoming', edge.fromFlow, edge.fromStep)
+          : boardNodeKey('current', edge.fromFlow, edge.fromStep);
+      const toKey = sequence
+        ? boardNodeKey('current', edge.toFlow, edge.toStep)
+        : incoming
+          ? boardNodeKey('current', edge.toFlow, edge.toStep)
+          : boardNodeKey('outgoing', edge.toFlow, edge.toStep);
       const fromNode = diagramWrap.querySelector(`[data-node-key="${CSS.escape(fromKey)}"]`);
       const toNode = diagramWrap.querySelector(`[data-node-key="${CSS.escape(toKey)}"]`);
       if (!fromNode || !toNode) return '';
@@ -378,12 +608,15 @@
       const endRect = toNode.getBoundingClientRect();
       const start = { x: startRect.right - wrapRect.left, y: startRect.top + startRect.height / 2 - wrapRect.top };
       const end = { x: endRect.left - wrapRect.left, y: endRect.top + endRect.height / 2 - wrapRect.top };
-      const trunkX = start.x + Math.max(42, Math.abs(end.x - start.x) * 0.44);
-      const d = `M ${start.x} ${start.y} C ${trunkX} ${start.y}, ${trunkX} ${end.y}, ${end.x} ${end.y}`;
-      const direction = incoming ? 'incoming' : 'outgoing';
-      const activeStep = incoming ? edge.toStep : edge.fromStep;
-      const active = activeStep === currentStep?.id ? ' active' : '';
-      return `<path class="edge cross-edge ${direction}${active}" data-edge-id="${escapeHtml(edge.id)}" d="${d}" />`;
+      const sameRow = Math.abs(start.y - end.y) < 8;
+      const trunkX = start.x + (end.x - start.x) * 0.5;
+      const d = sameRow
+        ? `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+        : `M ${start.x} ${start.y} C ${trunkX} ${start.y}, ${trunkX} ${end.y}, ${end.x} ${end.y}`;
+      const direction = sequence ? 'sequence' : incoming ? 'incoming' : 'outgoing';
+      const active = edge.fromStep === currentStep?.id || edge.toStep === currentStep?.id ? ' active' : '';
+      const edgeClass = sequence ? 'step-edge sequence-edge' : `cross-edge ${direction}`;
+      return `<path class="edge ${edgeClass}${active}" data-edge-id="${escapeHtml(edge.id)}" d="${d}" />`;
     }).join('');
     edgeLayer.innerHTML = defs + paths;
   }
@@ -874,7 +1107,7 @@
           </div>
         {/if}
 
-        <div class="board-scroll">
+        <div class="board-scroll flow-layout">
           <div class="lane-heads">
             {#each LANES as lane}
               <div class="lane-head">
@@ -885,7 +1118,11 @@
           </div>
           <div class="diagram-wrap" bind:this={diagramWrap}>
             <svg class="edge-layer" bind:this={edgeLayer} aria-hidden="true"></svg>
-            <div class="diagram-grid" style:grid-template-rows={`repeat(${boardProjection.rowCount}, minmax(94px, auto))`}>
+            <div
+              class="diagram-grid"
+              style:grid-template-columns={`repeat(${boardProjection.columnCount}, max-content)`}
+              style:grid-template-rows={`repeat(${boardProjection.rowCount}, var(--board-row-height))`}
+            >
               {#each boardProjection.nodes as node (node.key)}
                 <button
                   class:context-node={node.role !== 'current'}
@@ -898,8 +1135,8 @@
                   class="step-node"
                   type="button"
                   data-node-key={node.key}
-                  style={`grid-column:${node.laneIndex + 1};grid-row:${node.row}`}
-                  onclick={() => node.role === 'current' ? setStepByIndex(node.step.index) : selectFlowStep(node.flowId, node.stepId)}
+                  style={`grid-column:${node.column};grid-row:${node.row}`}
+                  onclick={() => selectBoardStepNode(node)}
                 >
                   <div class="node-topline">
                     <span class="node-seq" title={node.role === 'current' ? 'Current flow step' : `${directionLabel(node.role)} context step`} aria-label={node.role === 'current' ? 'Current flow step' : `${directionLabel(node.role)} context step`}>
@@ -925,27 +1162,61 @@
               <h3>Codebase Source</h3>
               <p>Static source snapshot with file tree, full-file view, and selected line range focus.</p>
             </div>
-            {#if selectedRange?.exact}
-              <span class="range-badge">L{selectedRange.startLine}-L{selectedRange.endLine}</span>
-            {:else if selectedRange}
-              <span class="range-badge muted">File fallback</span>
-            {/if}
+            <div class="source-head-actions">
+              <span class="pin-count-badge" title="Registered pins / total pinnable step ranges">
+                {pinSummary.pinned} / {pinSummary.total}
+              </span>
+              {#if !selectedSymbol}
+                <button
+                  class:active={isCurrentRangePinned}
+                  class="pin-toggle"
+                  disabled={!currentPinRange}
+                  title={isCurrentRangePinned ? 'Unpin selected step range' : 'Pin selected step range'}
+                  type="button"
+                  onclick={toggleCurrentRangePin}
+                >
+                  <span>{isCurrentRangePinned ? 'Unpin' : 'Pin'}</span>
+                </button>
+              {/if}
+              <button
+                class:active={showPinList}
+                class="pin-toggle"
+                title="Show registered pins"
+                type="button"
+                onclick={() => (showPinList = !showPinList)}
+              >
+                {showPinList ? 'Hide pins' : 'Show pins'}
+              </button>
+              {#if selectedRange?.exact}
+                <span class="range-badge">L{selectedRange.startLine}-L{selectedRange.endLine}</span>
+              {:else if selectedRange}
+                <span class="range-badge muted">File fallback</span>
+              {/if}
+            </div>
           </div>
           <div class="code-browser-layout">
             <div class="file-tree" aria-label="Codebase file tree">
               {#if fileTreeRows.length}
                 {#each fileTreeRows as row (row.node.id)}
+                  {@const coverage = coverageForTreeNode(row.node)}
                   <button
                     class:active={row.node.kind === 'file' && row.node.path === selectedFile?.repoPath}
                     class:directory={row.node.kind === 'directory'}
                     class:file={row.node.kind === 'file'}
+                    class:pinned-partial={coverage.status === 'partial'}
+                    class:pinned-all={coverage.status === 'all'}
+                    class:pinned-full={coverage.status === 'full'}
                     class="file-tree-row"
                     style={`--depth:${row.depth}`}
+                    title={coverage.label}
                     type="button"
                     onclick={() => row.node.kind === 'directory' ? toggleTreeDir(row.node.path) : selectFile(row.node.path)}
                   >
                     <span class="tree-icon">{row.node.kind === 'directory' ? (row.expanded ? '-' : '+') : '·'}</span>
                     <span class="tree-name">{row.node.name}</span>
+                    {#if coverage.status !== 'none'}
+                      <span class="tree-pin-status" aria-label={coverage.label}>✓</span>
+                    {/if}
                     {#if row.node.kind === 'file'}
                       <span class="tree-meta">{row.node.lineCount}</span>
                     {/if}
@@ -960,14 +1231,50 @@
                 <code>{selectedFile?.repoPath || 'No file selected'}</code>
                 <span>{selectedFile?.language || ''}{selectedFile ? ` / ${selectedFile.lineCount} lines` : ''}</span>
               </div>
-              <div class="source-code" bind:this={codeScroller}>{#each selectedFileLines as line, index (index)}<div
+              <div class="source-code" bind:this={codeScroller}>
+                {#each selectedFileLines as line, index (index)}
+                  {@const pinInfo = sourceLinePinInfo(index + 1)}
+                  <div
                     class:active-line={sourceLineInRange(index + 1)}
+                    class:pinned-line={Boolean(pinInfo)}
                     class="source-line"
                     data-code-line={index + 1}
-                  ><span class="line-number">{index + 1}</span><code>{line || ' '}</code></div>{/each}</div>
+                    title={pinInfo ? `Pinned by ${pinInfo.title}` : undefined}
+                  >
+                    <span class="line-number">{index + 1}</span>
+                    <code>{line || ' '}</code>
+                  </div>
+                {/each}
+              </div>
             </div>
           </div>
         </article>
+        {#if showPinList}
+          <article class="pin-list-panel" aria-label="Registered source range pins">
+            <div class="panel-head">
+              <div>
+                <h3>Registered Pins</h3>
+                <p>Pinned step ranges can be inspected, jumped to, or unpinned here.</p>
+              </div>
+              <span class="pin-count-badge">{pinSummary.pinned} / {pinSummary.total}</span>
+            </div>
+            <div class="pin-list">
+              {#each pinList as pin (pinIdForRange(pin))}
+                <div class="pin-list-row">
+                  <button class="pin-jump" type="button" onclick={() => jumpToPin(pin)}>
+                    <strong>{pin.title}</strong>
+                    <code>{pin.repoPath}:L{pin.startLine}-L{pin.endLine}</code>
+                  </button>
+                  <button class="pin-remove" title="Unpin this range" type="button" onclick={() => unpinRange(pin)}>
+                    Unpin
+                  </button>
+                </div>
+              {:else}
+                <div class="empty-state">No registered pins.</div>
+              {/each}
+            </div>
+          </article>
+        {/if}
       </section>
 
       <aside class="side-stack">

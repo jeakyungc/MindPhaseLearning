@@ -1,0 +1,730 @@
+--- a/index.html
++++ b/index.html
+@@ -26,7 +26,7 @@
+       --radius-md: 16px;
+       --radius-sm: 11px;
+       --speed: 1.35s;
+-      --sidebar-width: 318px;
++      --sidebar-width: 360px;
+     }
+ 
+     * { box-sizing: border-box; }
+@@ -212,6 +212,330 @@
+       font-variant-numeric: tabular-nums;
+     }
+ 
++
++    .relation-toolbar {
++      display: flex;
++      align-items: center;
++      justify-content: space-between;
++      gap: 10px;
++      margin-top: 10px;
++      padding: 9px 10px;
++      border: 1px solid var(--border);
++      border-radius: 11px;
++      background: rgba(255, 255, 255, 0.032);
++    }
++
++    .relation-toolbar div {
++      min-width: 0;
++      display: grid;
++      gap: 2px;
++    }
++
++    .relation-toolbar strong {
++      color: #dfe5f7;
++      font-size: 10px;
++      letter-spacing: 0.02em;
++    }
++
++    .relation-toolbar span {
++      overflow: hidden;
++      color: var(--muted-2);
++      font-size: 9px;
++      text-overflow: ellipsis;
++      white-space: nowrap;
++    }
++
++    .relation-toggle {
++      min-width: 38px;
++      height: 25px;
++      border: 1px solid var(--border);
++      border-radius: 999px;
++      color: var(--muted);
++      background: rgba(255, 255, 255, 0.045);
++      font-size: 9px;
++      font-weight: 900;
++      letter-spacing: 0.07em;
++    }
++
++    .relation-toggle.active {
++      color: #f4f7ff;
++      border-color: rgba(75, 214, 200, 0.42);
++      background: rgba(75, 214, 200, 0.16);
++    }
++
++    .relation-legend {
++      display: grid;
++      grid-template-columns: repeat(4, minmax(0, 1fr));
++      gap: 5px;
++      margin-top: 7px;
++      color: var(--muted-2);
++      font-size: 8px;
++    }
++
++    .relation-legend span {
++      display: flex;
++      align-items: center;
++      gap: 4px;
++      min-width: 0;
++      white-space: nowrap;
++    }
++
++    .relation-swatch {
++      width: 6px;
++      height: 6px;
++      flex: 0 0 auto;
++      border-radius: 50%;
++      background: #7f8cff;
++      box-shadow: 0 0 9px currentColor;
++    }
++
++    .relation-swatch.event { background: #4bd6c8; }
++    .relation-swatch.sync { background: #38bdf8; }
++    .relation-swatch.cleanup { background: #94a3b8; }
++
++    .group-map {
++      position: relative;
++      min-height: 100%;
++      padding-left: 19px;
++    }
++
++    .group-edge-layer {
++      position: absolute;
++      inset: 0;
++      z-index: 0;
++      overflow: visible;
++      pointer-events: none;
++    }
++
++    .group-map .group-block {
++      position: relative;
++      z-index: 1;
++    }
++
++    .group-title {
++      position: relative;
++      min-height: 25px;
++    }
++
++    .group-title-main {
++      min-width: 0;
++      display: flex;
++      align-items: center;
++      gap: 7px;
++    }
++
++    .group-anchor {
++      position: absolute;
++      left: -18px;
++      top: 6px;
++      width: 10px;
++      height: 10px;
++      border: 2px solid rgba(164, 177, 216, 0.5);
++      border-radius: 50%;
++      background: #111827;
++      box-shadow: 0 0 0 4px rgba(8, 11, 18, 0.76);
++    }
++
++    .group-block.active-group .group-anchor {
++      border-color: #7f8cff;
++      background: #7f8cff;
++      box-shadow: 0 0 0 4px rgba(127, 140, 255, 0.13), 0 0 15px rgba(127, 140, 255, 0.62);
++    }
++
++    .group-relation-stats {
++      display: flex;
++      align-items: center;
++      gap: 4px;
++    }
++
++    .group-relation-stat {
++      padding: 2px 5px;
++      border-radius: 999px;
++      color: var(--muted-2);
++      background: rgba(255, 255, 255, 0.042);
++      font-size: 8px;
++      font-variant-numeric: tabular-nums;
++    }
++
++    .group-block.active-group .group-relation-stat {
++      color: #cfd6ff;
++      background: rgba(127, 140, 255, 0.1);
++    }
++
++    .flow-meta {
++      display: flex;
++      align-items: center;
++      gap: 5px;
++    }
++
++    .flow-relation-count {
++      min-width: 22px;
++      padding: 2px 5px;
++      border-radius: 999px;
++      color: #8dded6;
++      background: rgba(75, 214, 200, 0.075);
++      font-size: 8px;
++      font-weight: 800;
++      text-align: center;
++    }
++
++    .flow-relation-count:empty { display: none; }
++
++    .group-relations-panel {
++      margin: 2px 7px 9px;
++      padding: 8px;
++      border: 1px solid rgba(127, 140, 255, 0.18);
++      border-radius: 11px;
++      background: linear-gradient(145deg, rgba(127, 140, 255, 0.085), rgba(75, 214, 200, 0.035));
++      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
++    }
++
++    .group-relations-heading {
++      display: flex;
++      align-items: center;
++      justify-content: space-between;
++      gap: 8px;
++      margin-bottom: 7px;
++      color: #dbe1f6;
++      font-size: 9px;
++      font-weight: 850;
++    }
++
++    .group-relations-heading span:last-child {
++      color: var(--muted-2);
++      font-size: 8px;
++      font-weight: 600;
++    }
++
++    .group-relation-list {
++      display: grid;
++      gap: 6px;
++    }
++
++    .group-relation-card {
++      --relation-color: #7f8cff;
++      width: 100%;
++      display: grid;
++      grid-template-columns: 35px minmax(0, 1fr);
++      gap: 3px 7px;
++      padding: 7px 8px;
++      border: 1px solid color-mix(in srgb, var(--relation-color) 24%, transparent);
++      border-radius: 9px;
++      text-align: left;
++      background: color-mix(in srgb, var(--relation-color) 7%, rgba(10, 14, 23, 0.8));
++      transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
++    }
++
++    .group-relation-card:hover {
++      transform: translateX(2px);
++      border-color: color-mix(in srgb, var(--relation-color) 52%, transparent);
++      background: color-mix(in srgb, var(--relation-color) 12%, rgba(10, 14, 23, 0.86));
++    }
++
++    .group-relation-card.flow-linked {
++      box-shadow: inset 2px 0 0 var(--relation-color);
++    }
++
++    .relation-direction {
++      grid-row: 1 / span 3;
++      align-self: start;
++      padding: 3px 4px;
++      border-radius: 6px;
++      color: var(--relation-color);
++      background: color-mix(in srgb, var(--relation-color) 12%, transparent);
++      font-size: 8px;
++      font-weight: 950;
++      letter-spacing: 0.06em;
++      text-align: center;
++    }
++
++    .relation-target {
++      min-width: 0;
++      display: flex;
++      align-items: center;
++      gap: 5px;
++      color: #eef2ff;
++      font-size: 10px;
++      font-weight: 800;
++    }
++
++    .relation-target b {
++      color: var(--relation-color);
++      font-size: 10px;
++    }
++
++    .relation-route {
++      grid-column: 2;
++      overflow: hidden;
++      color: #c5cede;
++      font-size: 8.5px;
++      line-height: 1.35;
++      text-overflow: ellipsis;
++      white-space: nowrap;
++    }
++
++    .relation-via {
++      grid-column: 2;
++      overflow: hidden;
++      color: var(--muted-2);
++      font-size: 8.5px;
++      text-overflow: ellipsis;
++      white-space: nowrap;
++    }
++
++    .relation-copy {
++      grid-column: 1 / -1;
++      margin-top: 3px;
++      color: #aab4ca;
++      font-size: 9px;
++      line-height: 1.45;
++    }
++
++    .group-edge {
++      fill: none;
++      stroke-linecap: round;
++      stroke-width: 1.25;
++      opacity: 0.1;
++      transition: opacity 180ms ease, stroke-width 180ms ease;
++      vector-effect: non-scaling-stroke;
++    }
++
++    .group-edge.related {
++      opacity: 0.47;
++      stroke-width: 1.65;
++    }
++
++    .group-edge.current {
++      opacity: 0.96;
++      stroke-width: 2.35;
++      stroke-dasharray: 6 5;
++      animation: group-edge-flow 1.15s linear infinite;
++      filter: drop-shadow(0 0 4px rgba(127, 140, 255, 0.48));
++    }
++
++    .group-edge-source {
++      opacity: 0.14;
++      transition: opacity 180ms ease;
++    }
++
++    .group-edge-source.related { opacity: 0.65; }
++    .group-edge-source.current { opacity: 1; }
++
++    .relations-hidden .group-edge-layer,
++    .relations-hidden .group-relations-panel,
++    .relations-hidden .group-relation-stats,
++    .relations-hidden .flow-relation-count,
++    .relations-hidden .relation-legend {
++      display: none;
++    }
++
++    .relations-hidden .group-map { padding-left: 0; }
++    .relations-hidden .group-anchor { display: none; }
++
++    @keyframes group-edge-flow {
++      to { stroke-dashoffset: -22; }
++    }
++
+     .main {
+       min-width: 0;
+       padding: 22px;
+@@ -899,7 +1223,7 @@
+     .mobile-menu-button { display: none; }
+ 
+     @media (max-width: 1180px) {
+-      :root { --sidebar-width: 280px; }
++      :root { --sidebar-width: 310px; }
+       .content-grid { grid-template-columns: minmax(0, 1fr); }
+       .side-stack {
+         position: static;
+@@ -964,6 +1288,19 @@
+       </div>
+       <div class="search-wrap">
+         <input id="flowSearch" type="search" placeholder="흐름, 명령, 파일 검색" autocomplete="off" />
++        <div class="relation-toolbar">
++          <div>
++            <strong>그룹 호출 관계</strong>
++            <span>방향선과 전이 원인을 함께 표시</span>
++          </div>
++          <button class="relation-toggle active" id="relationToggle" type="button" aria-pressed="true">ON</button>
++        </div>
++        <div class="relation-legend" aria-label="그룹 관계 유형">
++          <span><i class="relation-swatch call"></i>호출</span>
++          <span><i class="relation-swatch event"></i>이벤트</span>
++          <span><i class="relation-swatch sync"></i>동기화</span>
++          <span><i class="relation-swatch cleanup"></i>정리</span>
++        </div>
+       </div>
+       <nav class="flow-list" id="flowList"></nav>
+     </aside>
+@@ -1100,7 +1437,7 @@
+ 
+       <footer class="footer-note">
+         <span>키보드: Space 재생/일시정지 · ←/→ 단계 이동 · Home 처음 · End 마지막</span>
+-        <span>단일 HTML · 외부 의존성 없음 · 로컬 파일, localhost, CodePen/JSFiddle에서 실행 가능</span>
++        <span>단일 HTML · 그룹 CALL/TRIGGER/EVENT/SYNC 관계 포함 · 로컬 파일, localhost, CodePen/JSFiddle 실행 가능</span>
+       </footer>
+     </main>
+   </div>
+@@ -1632,6 +1969,85 @@
+       },
+     ];
+ 
++
++    const RELATION_KINDS = {
++      load:    { label: 'LOAD',    color: '#a78bfa' },
++      init:    { label: 'INIT',    color: '#60a5fa' },
++      restore: { label: 'RESTORE', color: '#c084fc' },
++      trigger: { label: 'TRIGGER', color: '#ffbf69' },
++      call:    { label: 'CALL',    color: '#7f8cff' },
++      event:   { label: 'EVENT',   color: '#4bd6c8' },
++      sync:    { label: 'SYNC',    color: '#38bdf8' },
++      apply:   { label: 'APPLY',   color: '#fb7185' },
++      reload:  { label: 'RELOAD',  color: '#34d399' },
++      extend:  { label: 'EXTEND',  color: '#f472b6' },
++      cleanup: { label: 'CLEANUP', color: '#94a3b8' },
++    };
++
++    const GROUP_RELATIONS = [
++      R('lifecycle-settings', 'App Lifecycle', 'Settings', 'load',
++        'page-mount', 'durable-preferences', 'onMount → durableLoaders.*',
++        'Page mount가 theme, zoom, graph·shortcut 등의 durable preference 복원을 병렬로 시작합니다.'),
++      R('lifecycle-workspace', 'App Lifecycle', 'Workspace', 'load',
++        'page-mount', 'workspace-tree-load', 'onMount → workspaceTree()',
++        'Page mount가 workspace 설정과 tree load를 호출해 첫 화면의 탐색 상태를 구성합니다.'),
++      R('lifecycle-graph', 'App Lifecycle', 'Graph', 'init',
++        'engine-init', 'graph-snapshot', 'runPageEngineInit → GraphRuntime.init',
++        'Renderer 준비 후 GraphRuntime을 생성하고 document graph snapshot 로드를 호출합니다.'),
++      R('lifecycle-editor', 'App Lifecycle', 'Document & Editor', 'restore',
++        'engine-init', 'editor-session', 'engine ready → restoreEditorSessionState',
++        'Graph engine과 overlay 기반이 준비된 뒤 이전 editor session을 복원합니다.'),
++      R('lifecycle-extensions', 'App Lifecycle', 'Extensions', 'load',
++        'page-mount', 'community', 'durableLoaders.community()',
++        '초기 mount에서 community catalog와 설치 항목을 로드해 확장 기능 상태를 준비합니다.'),
++      R('workspace-editor', 'Workspace', 'Document & Editor', 'trigger',
++        'workspace-tree-load', 'document-open', 'row/node click → openWorkspaceFile',
++        'Workspace row 또는 graph surface의 open action이 document read와 editor open을 트리거합니다.'),
++      R('workspace-index', 'Workspace', 'Search & Index', 'call',
++        'workspace-create-file', 'reindex', 'create/move/copy/trash → watcher/reindex',
++        'Workspace mutation은 파일 감시 또는 명시적 reindex 호출로 검색 인덱스를 갱신합니다.'),
++      R('editor-index', 'Document & Editor', 'Search & Index', 'call',
++        'document-save', 'reindex', 'saveDocument → reindexChangedPaths',
++        '문서 저장 결과를 changed-path reindex로 전달해 검색 결과와 graph source를 최신화합니다.'),
++      R('index-workspace', 'Search & Index', 'Workspace', 'event',
++        'reindex', 'workspace-tree-load', 'workspace-indexed → loadWorkspaceTree',
++        '색인 완료 이벤트가 workspace tree 재로드를 요청해 파일 시스템 상태를 화면에 반영합니다.'),
++      R('index-graph', 'Search & Index', 'Graph', 'event',
++        'reindex', 'graph-snapshot', 'workspace-indexed → reloadSnapshot',
++        '색인 완료 이벤트가 graph snapshot reload와 HUD·overlay 재동기화를 트리거합니다.'),
++      R('graph-editor', 'Graph', 'Document & Editor', 'trigger',
++        'graph-interaction', 'document-open', 'graph node click → openEditor',
++        'Graph node 선택·더블클릭·컨텍스트 액션이 대응 문서의 editor workflow를 시작합니다.'),
++      R('editor-graph', 'Document & Editor', 'Graph', 'sync',
++        'editor-close', 'graph-interaction', 'open/activate/close → selection & occupancy sync',
++        'Editor 활성화와 닫기가 graph selection, editor occupancy, overlay snapshot을 동기화합니다.'),
++      R('settings-graph', 'Settings', 'Graph', 'apply',
++        'durable-preferences', 'render-loop', 'preferences apply → runtime invalidation',
++        'Graph preference, zoom, theme 적용 결과가 runtime 설정과 render invalidation에 반영됩니다.'),
++      R('extensions-settings', 'Extensions', 'Settings', 'reload',
++        'community', 'theme', 'theme install/remove → reloadThemes',
++        'Community theme 설치·삭제가 theme catalog와 현재 적용 theme 재로드를 호출합니다.'),
++      R('extensions-workspace', 'Extensions', 'Workspace', 'event',
++        'chat', 'workspace-tree-load', 'markdown write → watcher → tree reload',
++        'LLM 응답 markdown 저장이 파일 감시 이벤트를 만들고 workspace tree를 다시 불러옵니다.'),
++      R('extensions-editor', 'Extensions', 'Document & Editor', 'extend',
++        'collaboration', 'document-open', 'collab/PDF/anchor → editor capability',
++        'Collaboration, PDF annotation, document anchor가 열린 문서의 편집 lifecycle을 확장합니다.'),
++      R('graph-cleanup', 'Graph', 'App Lifecycle', 'cleanup',
++        'graph-snapshot', 'page-unmount', 'unmount → GraphRuntime.destroy',
++        'Page unmount가 graph worker, runtime, renderer, GPU 자원을 종료합니다.'),
++      R('editor-cleanup', 'Document & Editor', 'App Lifecycle', 'cleanup',
++        'editor-session', 'page-unmount', 'session persist → motion/resize dispose',
++        'Unmount 전 editor session을 저장하고 editor motion·resize 관련 자원을 정리합니다.'),
++      R('settings-cleanup', 'Settings', 'App Lifecycle', 'cleanup',
++        'theme', 'page-unmount', 'unmount → appTheme.dispose',
++        'Unmount가 system theme media listener와 theme 관련 DOM 연결을 해제합니다.'),
++    ];
++
++    function R(id, from, to, kind, fromFlow, toFlow, via, description) {
++      return { id, from, to, kind, fromFlow, toFlow, via, description };
++    }
++
+     function S(lane, title, code, desc, call, source, result) {
+       return { lane, title, code, desc, call, source, result };
+     }
+@@ -1644,6 +2060,7 @@
+       speed: 1500,
+       loopAll: true,
+       filter: '',
++      showGroupRelations: true,
+     };
+ 
+     const els = Object.fromEntries([
+@@ -1651,7 +2068,7 @@
+       'currentStepTitle','currentStepDesc','progressLabel','progressPercent','progressBar','laneHeads',
+       'diagramWrap','diagramGrid','edgeLayer','detailRole','detailCall','detailSource','detailResult',
+       'logBody','timeline','timelineScroll','boardScroll','prevButton','playButton','nextButton','speedSelect',
+-      'loopToggle','resetButton','sidebar','menuButton'
++      'loopToggle','resetButton','sidebar','menuButton','relationToggle'
+     ].map(id => [id, document.getElementById(id)]));
+ 
+     function currentFlow() { return FLOWS[state.flowIndex]; }
+@@ -1666,33 +2083,124 @@
+       `).join('');
+     }
+ 
++    function flowById(id) {
++      return FLOWS.find(flow => flow.id === id) ?? null;
++    }
++
++    function flowIndexById(id) {
++      return FLOWS.findIndex(flow => flow.id === id);
++    }
++
++    function relationsForGroup(group) {
++      return GROUP_RELATIONS.filter(relation => relation.from === group || relation.to === group);
++    }
++
++    function relationsForFlow(flowId) {
++      return GROUP_RELATIONS.filter(relation => relation.fromFlow === flowId || relation.toFlow === flowId);
++    }
++
++    function relationKind(relation) {
++      return RELATION_KINDS[relation.kind] ?? RELATION_KINDS.call;
++    }
++
++    function relationPanel(group) {
++      const relations = relationsForGroup(group);
++      if (!relations.length) return '';
++      const activeFlowId = currentFlow().id;
++      return `
++        <div class="group-relations-panel">
++          <div class="group-relations-heading">
++            <span>현재 그룹 연결</span>
++            <span>카드 선택 → 반대편 흐름 이동</span>
++          </div>
++          <div class="group-relation-list">
++            ${relations.map(relation => {
++              const outgoing = relation.from === group;
++              const targetGroup = outgoing ? relation.to : relation.from;
++              const targetFlowId = outgoing ? relation.toFlow : relation.fromFlow;
++              const kind = relationKind(relation);
++              const linked = relation.fromFlow === activeFlowId || relation.toFlow === activeFlowId;
++              const fromFlowTitle = flowById(relation.fromFlow)?.title ?? relation.fromFlow;
++              const toFlowTitle = flowById(relation.toFlow)?.title ?? relation.toFlow;
++              return `
++                <button class="group-relation-card ${linked ? 'flow-linked' : ''}"
++                        type="button"
++                        data-relation-id="${escapeHtml(relation.id)}"
++                        data-target-flow-id="${escapeHtml(targetFlowId)}"
++                        style="--relation-color:${kind.color}"
++                        title="${escapeHtml(relation.description)}">
++                  <span class="relation-direction">${outgoing ? 'OUT' : 'IN'}</span>
++                  <span class="relation-target"><b>${outgoing ? '→' : '←'}</b>${escapeHtml(targetGroup)} · ${kind.label}</span>
++                  <span class="relation-route" title="${escapeHtml(`${fromFlowTitle} → ${toFlowTitle}`)}">${escapeHtml(`${fromFlowTitle} → ${toFlowTitle}`)}</span>
++                  <span class="relation-via">via ${escapeHtml(relation.via)}</span>
++                  <span class="relation-copy">${escapeHtml(relation.description)}</span>
++                </button>
++              `;
++            }).join('')}
++          </div>
++        </div>
++      `;
++    }
++
+     function renderSidebar() {
+       const query = state.filter.trim().toLowerCase();
+       const groups = new Map();
+       FLOWS.forEach((flow, index) => {
+-        const haystack = [flow.group, flow.title, flow.summary, flow.tags.join(' '), ...flow.steps.flatMap(s => [s.title,s.code,s.call,s.source])].join(' ').toLowerCase();
++        const relationText = relationsForFlow(flow.id).flatMap(relation => [
++          relation.from, relation.to, relation.via, relation.description, relationKind(relation).label,
++        ]);
++        const haystack = [flow.group, flow.title, flow.summary, flow.tags.join(' '), ...relationText, ...flow.steps.flatMap(s => [s.title,s.code,s.call,s.source])].join(' ').toLowerCase();
+         if (query && !haystack.includes(query)) return;
+         if (!groups.has(flow.group)) groups.set(flow.group, []);
+         groups.get(flow.group).push({flow,index});
+       });
+ 
++      els.flowList.classList.toggle('relations-hidden', !state.showGroupRelations);
++      els.sidebar.classList.toggle('relations-hidden', !state.showGroupRelations);
++
+       if (!groups.size) {
+         els.flowList.innerHTML = '<div class="empty-state">일치하는 흐름이 없습니다.</div>';
+         return;
+       }
+ 
+-      els.flowList.innerHTML = [...groups.entries()].map(([group, items]) => `
+-        <section class="group-block">
+-          <div class="group-title"><span>${escapeHtml(group)}</span><span class="group-count">${items.length}</span></div>
+-          ${items.map(({flow,index}) => `
+-            <button class="flow-item ${index === state.flowIndex ? 'active' : ''}" data-flow-index="${index}">
+-              <span class="flow-index">${String(index + 1).padStart(2, '0')}</span>
+-              <span class="flow-name">${escapeHtml(flow.title)}</span>
+-              <span class="flow-step-count">${flow.steps.length}</span>
+-            </button>
+-          `).join('')}
+-        </section>
+-      `).join('');
++      const activeGroup = currentFlow().group;
++      els.flowList.innerHTML = `
++        <div class="group-map" id="groupMap">
++          <svg class="group-edge-layer" id="groupEdgeLayer" aria-hidden="true"></svg>
++          ${[...groups.entries()].map(([group, items]) => {
++            const relations = relationsForGroup(group);
++            const outgoing = relations.filter(relation => relation.from === group).length;
++            const incoming = relations.filter(relation => relation.to === group).length;
++            const isActiveGroup = group === activeGroup;
++            return `
++              <section class="group-block ${isActiveGroup ? 'active-group' : ''}" data-group="${escapeHtml(group)}">
++                <div class="group-title" data-group-anchor="${escapeHtml(group)}">
++                  <i class="group-anchor" aria-hidden="true"></i>
++                  <span class="group-title-main"><span>${escapeHtml(group)}</span><span class="group-count">${items.length}</span></span>
++                  <span class="group-relation-stats" title="그룹 간 outgoing / incoming 관계 수">
++                    <span class="group-relation-stat">↗ ${outgoing}</span>
++                    <span class="group-relation-stat">↙ ${incoming}</span>
++                  </span>
++                </div>
++                ${isActiveGroup && state.showGroupRelations ? relationPanel(group) : ''}
++                ${items.map(({flow,index}) => {
++                  const relationCount = relationsForFlow(flow.id).length;
++                  return `
++                    <button class="flow-item ${index === state.flowIndex ? 'active' : ''}" data-flow-index="${index}">
++                      <span class="flow-index">${String(index + 1).padStart(2, '0')}</span>
++                      <span class="flow-name">${escapeHtml(flow.title)}</span>
++                      <span class="flow-meta">
++                        <span class="flow-relation-count" title="이 흐름과 직접 연결된 그룹 전이 수">${relationCount ? `↔${relationCount}` : ''}</span>
++                        <span class="flow-step-count">${flow.steps.length}</span>
++                      </span>
++                    </button>
++                  `;
++                }).join('')}
++              </section>
++            `;
++          }).join('')}
++        </div>
++      `;
+ 
+       els.flowList.querySelectorAll('.flow-item').forEach(button => {
+         button.addEventListener('click', () => {
+@@ -1700,6 +2208,77 @@
+           els.sidebar.classList.remove('open');
+         });
+       });
++
++      els.flowList.querySelectorAll('.group-relation-card').forEach(button => {
++        button.addEventListener('click', () => {
++          const targetIndex = flowIndexById(button.dataset.targetFlowId);
++          if (targetIndex < 0) return;
++          state.filter = '';
++          els.flowSearch.value = '';
++          selectFlow(targetIndex);
++          els.sidebar.classList.remove('open');
++        });
++      });
++
++      requestAnimationFrame(() => requestAnimationFrame(drawGroupEdges));
++    }
++
++    function drawGroupEdges() {
++      const groupMap = document.getElementById('groupMap');
++      const svg = document.getElementById('groupEdgeLayer');
++      if (!groupMap || !svg || !state.showGroupRelations) return;
++
++      const groupAnchors = new Map(
++        [...groupMap.querySelectorAll('[data-group-anchor]')].map(header => [
++          header.dataset.groupAnchor,
++          header.querySelector('.group-anchor'),
++        ]),
++      );
++      const visibleRelations = GROUP_RELATIONS.filter(relation => (
++        groupAnchors.has(relation.from) && groupAnchors.has(relation.to)
++      ));
++      const mapRect = groupMap.getBoundingClientRect();
++      const width = Math.max(groupMap.scrollWidth, groupMap.clientWidth);
++      const height = Math.max(groupMap.scrollHeight, groupMap.clientHeight);
++      const activeGroup = currentFlow().group;
++      const activeFlowId = currentFlow().id;
++
++      const markerKinds = [...new Set(visibleRelations.map(relation => relation.kind))];
++      const defs = `
++        <defs>
++          ${markerKinds.map(kindName => {
++            const kind = RELATION_KINDS[kindName] ?? RELATION_KINDS.call;
++            return `<marker id="group-arrow-${kindName}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 8 4 L 0 8 z" fill="${kind.color}" /></marker>`;
++          }).join('')}
++        </defs>
++      `;
++
++      const edges = visibleRelations.map((relation, index) => {
++        const source = groupAnchors.get(relation.from).getBoundingClientRect();
++        const target = groupAnchors.get(relation.to).getBoundingClientRect();
++        const x1 = source.left - mapRect.left + source.width / 2;
++        const y1 = source.top - mapRect.top + source.height / 2;
++        const x2 = target.left - mapRect.left + target.width / 2;
++        const y2 = target.top - mapRect.top + target.height / 2;
++        const direction = y2 >= y1 ? 1 : -1;
++        const railX = Math.max(2, Math.min(x1, x2) - 7 - (index % 5) * 2.4);
++        const span = Math.max(18, Math.min(42, Math.abs(y2 - y1) * 0.18));
++        const kind = relationKind(relation);
++        const related = relation.from === activeGroup || relation.to === activeGroup;
++        const current = relation.fromFlow === activeFlowId || relation.toFlow === activeFlowId;
++        const classes = ['group-edge', related ? 'related' : '', current ? 'current' : ''].filter(Boolean).join(' ');
++        const circleClasses = ['group-edge-source', related ? 'related' : '', current ? 'current' : ''].filter(Boolean).join(' ');
++        const d = `M ${x1} ${y1} C ${railX} ${y1 + span * direction}, ${railX} ${y2 - span * direction}, ${x2} ${y2}`;
++        return `
++          <path class="${classes}" d="${d}" stroke="${kind.color}" marker-end="url(#group-arrow-${relation.kind})" />
++          <circle class="${circleClasses}" cx="${x1}" cy="${y1}" r="2.1" fill="${kind.color}" />
++        `;
++      }).join('');
++
++      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
++      svg.setAttribute('width', width);
++      svg.setAttribute('height', height);
++      svg.innerHTML = defs + edges;
+     }
+ 
+     function renderFlow() {
+@@ -1713,6 +2292,7 @@
+         `<span class="meta-chip">Trigger · ${escapeHtml(flow.trigger)}</span>`,
+         `<span class="meta-chip">Result · ${escapeHtml(flow.result)}</span>`,
+         `<span class="meta-chip">${flow.steps.length} steps</span>`,
++        ...(relationsForFlow(flow.id).length ? [`<span class="meta-chip">Group links · ${relationsForFlow(flow.id).length}</span>`] : []),
+         ...flow.tags.slice(0, 3).map(tag => `<span class="meta-chip">${escapeHtml(tag)}</span>`),
+       ].join('');
+ 
+@@ -1928,6 +2508,13 @@
+       state.filter = event.target.value;
+       renderSidebar();
+     });
++    els.relationToggle.addEventListener('click', () => {
++      state.showGroupRelations = !state.showGroupRelations;
++      els.relationToggle.classList.toggle('active', state.showGroupRelations);
++      els.relationToggle.textContent = state.showGroupRelations ? 'ON' : 'OFF';
++      els.relationToggle.setAttribute('aria-pressed', String(state.showGroupRelations));
++      renderSidebar();
++    });
+     els.menuButton.addEventListener('click', () => els.sidebar.classList.toggle('open'));
+ 
+     document.addEventListener('click', event => {
+@@ -1949,7 +2536,7 @@
+ 
+     const resizeObserver = new ResizeObserver(() => requestAnimationFrame(drawEdges));
+     resizeObserver.observe(els.diagramWrap);
+-    window.addEventListener('resize', () => requestAnimationFrame(drawEdges));
++    window.addEventListener('resize', () => requestAnimationFrame(() => { drawEdges(); drawGroupEdges(); }));
+ 
+     renderLaneHeads();
+     renderFlow();

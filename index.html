@@ -896,6 +896,13 @@
       scrollbar-color: rgba(160, 172, 205, 0.28) transparent;
     }
 
+    .board-scroll[data-layout="flow"] {
+      display: grid;
+      grid-template-columns: 168px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+
     .lane-heads {
       min-width: 980px;
       display: grid;
@@ -904,6 +911,17 @@
       background:
         linear-gradient(180deg, rgba(24, 32, 51, 0.94), rgba(14, 19, 31, 0.92));
       box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.035);
+    }
+
+    .board-scroll[data-layout="flow"] .lane-heads {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      border-bottom: 0;
+      border-right: 1px solid var(--border);
+      box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.035);
+      background:
+        linear-gradient(180deg, rgba(24, 32, 51, 0.94), rgba(14, 19, 31, 0.92));
     }
 
     .lane-head {
@@ -953,6 +971,33 @@
       font-size: 8px;
     }
 
+    .board-scroll[data-layout="flow"] .lane-head {
+      min-height: 94px;
+      padding: 13px 12px 13px 16px;
+      border-right: 0;
+      border-bottom: 1px solid rgba(151, 166, 207, 0.18);
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .board-scroll[data-layout="flow"] .lane-head:last-child {
+      border-bottom: 0;
+    }
+
+    .board-scroll[data-layout="flow"] .lane-head::before {
+      top: 10px;
+      left: 0;
+      right: auto;
+      width: 3px;
+      height: calc(100% - 20px);
+      border-radius: 999px;
+      background: linear-gradient(180deg, transparent, var(--lane-color), transparent);
+      box-shadow: 0 0 16px color-mix(in srgb, var(--lane-color) 48%, transparent);
+    }
+
     .diagram-wrap {
       position: relative;
       min-width: 980px;
@@ -960,7 +1005,7 @@
       padding: 16px 12px 28px;
       background:
         linear-gradient(
-          to right,
+          to bottom,
           rgba(127, 140, 255, 0.078) 0,
           rgba(127, 140, 255, 0.078) 16.666%,
           rgba(105, 183, 255, 0.058) 16.666%,
@@ -975,7 +1020,7 @@
           rgba(255, 141, 179, 0.052) 100%
         ),
         repeating-linear-gradient(
-          to right,
+          to bottom,
           transparent 0,
           transparent calc(16.666% - 1px),
           rgba(151, 166, 207, 0.14) calc(16.666% - 1px),
@@ -990,6 +1035,10 @@
       grid-template-columns: repeat(6, minmax(146px, 1fr));
       grid-auto-rows: minmax(94px, auto);
       gap: 12px 12px;
+    }
+
+    .board-scroll[data-layout="flow"] .diagram-grid {
+      grid-auto-rows: minmax(94px, auto);
     }
 
     .edge-layer {
@@ -2097,8 +2146,7 @@
 
     function buildBoardProjection(flow) {
       const crossEdges = crossFunctionEdgesForFlow(flow.id);
-      const rows = [];
-      const nodes = [];
+      const slots = [];
       const seen = new Set();
 
       function addNode(flowId, stepId, role, edge = null) {
@@ -2108,9 +2156,8 @@
         const key = boardNodeKey(flowId, stepId);
         if (seen.has(`${role}:${key}`)) return;
         seen.add(`${role}:${key}`);
-        rows.push({ flowId, stepId, role, edge });
         const laneIndex = Math.max(0, LANES.findIndex(lane => lane.id === step.lane));
-        nodes.push({
+        slots.push({
           key,
           role,
           flowId,
@@ -2118,7 +2165,6 @@
           flow: nodeFlow,
           step,
           laneIndex,
-          row: rows.length,
         });
       }
 
@@ -2132,7 +2178,14 @@
         .filter(edge => edge.fromFlow === flow.id)
         .forEach(edge => addNode(edge.toFlow, edge.toStep, 'outgoing', edge));
 
-      return { nodes, edges: crossEdges, rowCount: Math.max(rows.length, flow.steps.length) };
+      const columnCount = Math.max(slots.length, 1);
+      const nodes = slots.map((node, index) => ({
+        ...node,
+        column: columnCount - index,
+        row: node.laneIndex + 1,
+      }));
+
+      return { nodes, edges: crossEdges, rowCount: LANES.length, columnCount };
     }
 
     function renderBoardNode(node) {
@@ -2150,7 +2203,7 @@
                  data-step-id="${escapeHtml(node.stepId)}"
                  data-node-key="${escapeHtml(node.key)}"
                  ${node.flowId === currentFlow().id ? `data-step-index="${node.step.index}"` : ''}
-                 style="grid-column:${node.laneIndex + 1};grid-row:${node.row}">
+                 style="grid-column:${node.column};grid-row:${node.row}">
           <div class="node-topline">
             <span class="node-seq">${escapeHtml(seq)}</span>
             <span class="node-flow">${escapeHtml(node.flow.group)} / ${escapeHtml(node.flow.title)}</span>
@@ -2337,6 +2390,7 @@
     function renderSymbolBoard(symbolId) {
       const projection = buildSymbolBoardProjection(symbolId);
       if (!projection) return;
+      els.boardScroll.dataset.layout = 'symbol';
       const symbol = projection.target;
       els.flowTitle.textContent = symbol.name;
       els.flowSummary.textContent = symbol.signature || symbolLocationLabel(symbol);
@@ -2384,6 +2438,7 @@
           <section class="flow-relation-column"><div class="flow-relation-column-head"><strong>Outgoing symbols</strong><span class="flow-relation-badge">${codebaseEdgesForSymbol(symbol.id).outgoing.length}</span></div></section>
         </div>
       `;
+      els.diagramGrid.style.gridTemplateColumns = `repeat(6, minmax(146px, 1fr))`;
       els.diagramGrid.style.gridTemplateRows = `repeat(${projection.rowCount}, minmax(94px, auto))`;
       els.diagramGrid.innerHTML = projection.nodes.map(renderSymbolNode).join('');
       els.diagramGrid.querySelectorAll('[data-symbol-id]').forEach(node => {
@@ -2587,6 +2642,7 @@
 
     function renderFlow() {
       const flow = currentFlow();
+      els.boardScroll.dataset.layout = 'flow';
       els.groupCrumb.textContent = flow.group;
       els.flowCrumb.textContent = flow.title;
       els.flowGroup.textContent = flow.group;
@@ -2606,6 +2662,7 @@
       els.diagramGrid.dataset.projection = JSON.stringify({
         edges: boardProjection.edges.map(edge => edge.id),
       });
+      els.diagramGrid.style.gridTemplateColumns = `repeat(${boardProjection.columnCount}, minmax(146px, 1fr))`;
       els.diagramGrid.style.gridTemplateRows = `repeat(${boardProjection.rowCount}, minmax(94px, auto))`;
       els.edgeLayer.querySelectorAll('.edge').forEach(edge => edge.remove());
       els.diagramGrid.innerHTML = boardProjection.nodes.map(renderBoardNode).join('');
@@ -2755,23 +2812,15 @@
         if (!sourceNode || !targetNode) return;
         const a = rectFor(sourceNode.getBoundingClientRect());
         const b = rectFor(targetNode.getBoundingClientRect());
-        const start = edge.fromFlow === flow.id
-          ? { x: a.centerX, y: a.bottom }
-          : { x: a.centerX, y: a.bottom };
-        const end = edge.toFlow === flow.id
-          ? { x: b.centerX, y: b.top }
-          : { x: b.centerX, y: b.top };
-        const sameColumn = Math.abs(start.x - end.x) < 8;
+        const start = { x: a.right, y: a.centerY };
+        const end = { x: b.left, y: b.centerY };
+        const sameRow = Math.abs(start.y - end.y) < 8;
         let d;
-        if (sameColumn) {
+        if (sameRow) {
           d = `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
         } else {
-          const gapY = Math.max(0, end.y - start.y);
-          const bendOffset = Math.min(18, Math.max(10, gapY * 0.32), gapY / 2);
-          const startBendY = start.y + bendOffset;
-          const endBendY = end.y - bendOffset;
           const trunkX = start.x + (end.x - start.x) * 0.5;
-          d = `M ${start.x} ${start.y} L ${start.x} ${startBendY} L ${trunkX} ${startBendY} L ${trunkX} ${endBendY} L ${end.x} ${endBendY} L ${end.x} ${end.y}`;
+          d = `M ${start.x} ${start.y} C ${trunkX} ${start.y}, ${trunkX} ${end.y}, ${end.x} ${end.y}`;
         }
         const direction = edge.toFlow === flow.id ? 'incoming' : 'outgoing';
         const activeStep = direction === 'incoming' ? edge.toStep : edge.fromStep;

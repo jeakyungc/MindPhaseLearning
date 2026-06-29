@@ -1,0 +1,3401 @@
+﻿<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>MindPhase Business Logic Lifecycle Visualizer</title>
+  <style>
+    :root {
+      --bg: #080b12;
+      --panel: rgba(16, 21, 33, 0.9);
+      --panel-2: rgba(21, 28, 44, 0.84);
+      --panel-3: rgba(30, 39, 58, 0.72);
+      --border: rgba(151, 166, 207, 0.18);
+      --border-strong: rgba(151, 166, 207, 0.34);
+      --text: #f2f5ff;
+      --muted: #9fa9bf;
+      --muted-2: #747f98;
+      --accent: #7f8cff;
+      --accent-2: #4bd6c8;
+      --accent-3: #ffbf69;
+      --danger: #ff7f91;
+      --success: #7ee2a8;
+      --shadow: 0 18px 60px rgba(0, 0, 0, 0.34);
+      --radius-lg: 24px;
+      --radius-md: 16px;
+      --radius-sm: 11px;
+      --speed: 1.35s;
+      --sidebar-width: 360px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+      margin: 0;
+      background:
+        radial-gradient(circle at 12% 8%, rgba(85, 100, 255, 0.18), transparent 26rem),
+        radial-gradient(circle at 88% 4%, rgba(63, 207, 192, 0.11), transparent 30rem),
+        linear-gradient(160deg, #090c14 0%, #070910 48%, #090d17 100%);
+      color: var(--text);
+      font-family: Inter, Pretendard, "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body { overflow-x: hidden; }
+
+    button, input, select { font: inherit; }
+
+    button {
+      color: inherit;
+      border: 0;
+      cursor: pointer;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    .flow-item:focus-visible {
+      outline: 2px solid #a8b1ff;
+      outline-offset: 2px;
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: rgba(7, 10, 17, 0.84);
+      backdrop-filter: blur(24px);
+      z-index: 20;
+    }
+
+    .brand {
+      padding: 24px 22px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-mark {
+      width: 42px;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      background:
+        linear-gradient(145deg, rgba(127, 140, 255, 0.9), rgba(75, 214, 200, 0.62));
+      box-shadow: 0 10px 32px rgba(92, 111, 255, 0.28);
+      font-weight: 900;
+      letter-spacing: -0.05em;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: -0.02em;
+    }
+
+    .brand p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .search-wrap { padding: 14px 16px 8px; }
+
+    .search-wrap input {
+      width: 100%;
+      height: 40px;
+      padding: 0 13px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.045);
+    }
+
+    .search-wrap input::placeholder { color: var(--muted-2); }
+
+    .flow-list {
+      overflow: auto;
+      padding: 6px 10px 20px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(160, 172, 205, 0.28) transparent;
+    }
+
+    .group-block { margin: 10px 0 16px; }
+
+    .group-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px 7px;
+      color: var(--muted-2);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .group-count {
+      min-width: 22px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      text-align: center;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .flow-item {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 9px;
+      padding: 10px 10px;
+      border-radius: 12px;
+      text-align: left;
+      background: transparent;
+      transition: background 160ms ease, transform 160ms ease, color 160ms ease;
+    }
+
+    .flow-item:hover { background: rgba(255, 255, 255, 0.052); }
+
+    .flow-item.active {
+      background: linear-gradient(90deg, rgba(127, 140, 255, 0.2), rgba(75, 214, 200, 0.07));
+      box-shadow: inset 0 0 0 1px rgba(139, 150, 255, 0.25);
+    }
+
+    .flow-index {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.055);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .flow-item.active .flow-index {
+      color: white;
+      background: linear-gradient(145deg, #7684ff, #4cbfc0);
+    }
+
+    .flow-name {
+      overflow: hidden;
+      color: #d8def0;
+      font-size: 12px;
+      font-weight: 680;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .flow-step-count {
+      color: var(--muted-2);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+
+    .relation-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: rgba(255, 255, 255, 0.032);
+    }
+
+    .relation-toolbar div {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+
+    .relation-toolbar strong {
+      color: #dfe5f7;
+      font-size: 10px;
+      letter-spacing: 0.02em;
+    }
+
+    .relation-toolbar span {
+      overflow: hidden;
+      color: var(--muted-2);
+      font-size: 9px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .relation-toggle {
+      min-width: 38px;
+      height: 25px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.045);
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 0.07em;
+    }
+
+    .relation-toggle.active {
+      color: #f4f7ff;
+      border-color: rgba(75, 214, 200, 0.42);
+      background: rgba(75, 214, 200, 0.16);
+    }
+
+    .relation-legend {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 5px;
+      margin-top: 7px;
+      color: var(--muted-2);
+      font-size: 8px;
+    }
+
+    .relation-legend span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      white-space: nowrap;
+    }
+
+    .relation-swatch {
+      width: 6px;
+      height: 6px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: #7f8cff;
+      box-shadow: 0 0 9px currentColor;
+    }
+
+    .relation-swatch.event { background: #4bd6c8; }
+    .relation-swatch.sync { background: #38bdf8; }
+    .relation-swatch.cleanup { background: #94a3b8; }
+
+    .group-title {
+      position: relative;
+      min-height: 25px;
+    }
+
+    .group-title-main {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .group-block.active-group .group-title { color: #dbe1f6; }
+
+    .flow-meta {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .flow-relation-count {
+      min-width: 22px;
+      padding: 2px 5px;
+      border-radius: 999px;
+      color: #8dded6;
+      background: rgba(75, 214, 200, 0.075);
+      font-size: 8px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .flow-relation-count:empty { display: none; }
+
+    .flow-relation-map[hidden] { display: none; }
+
+    .flow-relation-map {
+      padding: 15px 18px 17px;
+      border-bottom: 1px solid var(--border);
+      background:
+        linear-gradient(90deg, rgba(127, 140, 255, 0.06), rgba(75, 214, 200, 0.026)),
+        rgba(255, 255, 255, 0.014);
+    }
+
+    .flow-relation-layout {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(230px, 0.9fr) minmax(220px, 1fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .flow-relation-column,
+    .flow-current-card {
+      min-width: 0;
+      border: 1px solid rgba(151, 166, 207, 0.14);
+      border-radius: 8px;
+      background: rgba(8, 12, 20, 0.32);
+    }
+
+    .flow-relation-column {
+      padding: 11px;
+    }
+
+    .flow-relation-column-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 9px;
+    }
+
+    .flow-relation-column-head strong {
+      min-width: 0;
+      color: #dce3f5;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .flow-relation-badge {
+      min-width: 24px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      color: #9ee5dc;
+      background: rgba(75, 214, 200, 0.08);
+      font-size: 9px;
+      font-weight: 850;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .flow-link-stack {
+      display: grid;
+      gap: 8px;
+    }
+
+    .flow-link-empty {
+      min-height: 72px;
+      display: grid;
+      place-items: center;
+      padding: 12px;
+      border: 1px dashed rgba(151, 166, 207, 0.16);
+      border-radius: 8px;
+      color: var(--muted-2);
+      font-size: 10px;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .flow-link-card {
+      --relation-color: #7f8cff;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 126px;
+      padding: 10px;
+      border: 1px solid color-mix(in srgb, var(--relation-color) 24%, transparent);
+      border-radius: 8px;
+      text-align: left;
+      background: color-mix(in srgb, var(--relation-color) 7%, rgba(10, 14, 23, 0.8));
+      transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+    }
+
+    .flow-link-card:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--relation-color) 52%, transparent);
+      background: color-mix(in srgb, var(--relation-color) 12%, rgba(10, 14, 23, 0.86));
+    }
+
+    .flow-link-role {
+      color: var(--relation-color);
+      font-size: 9px;
+      font-weight: 850;
+    }
+
+    .flow-link-title {
+      color: #eef2ff;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .flow-link-route {
+      color: #c5cede;
+      font-size: 10px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .flow-link-meta {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .flow-link-kind {
+      padding: 2px 6px;
+      border-radius: 999px;
+      color: var(--relation-color);
+      background: color-mix(in srgb, var(--relation-color) 12%, transparent);
+      font-size: 9px;
+      font-weight: 850;
+    }
+
+    .flow-link-via {
+      display: block;
+      color: #b8c4e0;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 9px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .flow-link-copy {
+      color: #aab4ca;
+      font-size: 10px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .function-edge-section {
+      margin-top: 11px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(151, 166, 207, 0.1);
+    }
+
+    .function-edge-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+      color: #dce3f5;
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .function-edge-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .function-edge-card {
+      width: 100%;
+      display: grid;
+      gap: 5px;
+      padding: 9px;
+      border: 1px solid rgba(75, 214, 200, 0.18);
+      border-radius: 8px;
+      background: rgba(75, 214, 200, 0.055);
+      text-align: left;
+    }
+
+    .function-edge-route {
+      color: #eef2ff;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 9px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .function-edge-meta,
+    .function-edge-source {
+      color: var(--muted);
+      font-size: 9px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .function-edge-source { color: #8ea0c6; }
+
+    .flow-current-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 11px;
+      padding: 16px;
+      border-color: rgba(127, 140, 255, 0.36);
+      background:
+        linear-gradient(145deg, rgba(127, 140, 255, 0.16), rgba(75, 214, 200, 0.07)),
+        rgba(11, 15, 25, 0.74);
+      box-shadow: inset 0 0 0 1px rgba(127, 140, 255, 0.08);
+    }
+
+    .flow-current-label {
+      color: var(--accent-2);
+      font-size: 10px;
+      font-weight: 850;
+    }
+
+    .flow-current-title {
+      color: #f2f5ff;
+      font-size: 15px;
+      font-weight: 850;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .flow-current-group {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .flow-current-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .flow-current-stats span {
+      padding: 5px 8px;
+      border-radius: 999px;
+      color: #cfd6ff;
+      background: rgba(255, 255, 255, 0.055);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 22px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 17px;
+      background: rgba(11, 15, 25, 0.78);
+      backdrop-filter: blur(22px);
+      box-shadow: var(--shadow);
+    }
+
+    .breadcrumb {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .breadcrumb strong {
+      overflow: hidden;
+      color: var(--text);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .control-button,
+    .select-control,
+    .toggle-control {
+      min-height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: rgba(255, 255, 255, 0.05);
+      transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+    }
+
+    .control-button {
+      min-width: 38px;
+      padding: 0 11px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .control-button:hover,
+    .toggle-control:hover { background: rgba(255, 255, 255, 0.09); }
+
+    .control-button.primary {
+      border-color: rgba(135, 147, 255, 0.5);
+      background: linear-gradient(145deg, rgba(116, 130, 255, 0.88), rgba(70, 178, 181, 0.72));
+      box-shadow: 0 8px 24px rgba(92, 111, 255, 0.18);
+    }
+
+    .select-control {
+      height: 36px;
+      padding: 0 28px 0 10px;
+      color: var(--text);
+      appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+        linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position:
+        calc(100% - 13px) 15px,
+        calc(100% - 9px) 15px;
+      background-size: 4px 4px, 4px 4px;
+      background-repeat: no-repeat;
+    }
+
+    .select-control option { color: #111827; }
+
+    .toggle-control {
+      height: 36px;
+      padding: 0 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .toggle-control input { accent-color: var(--accent); }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.55fr);
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .hero-card,
+    .status-card,
+    .flow-board,
+    .detail-panel,
+    .log-panel {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .hero-card {
+      position: relative;
+      overflow: hidden;
+      min-height: 224px;
+      padding: 26px;
+      border-radius: var(--radius-lg);
+    }
+
+    .hero-card::before {
+      content: "";
+      position: absolute;
+      inset: auto -10% -55% 30%;
+      height: 270px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(88, 105, 255, 0.26), transparent 68%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      color: #b9c1d8;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-2);
+      box-shadow: 0 0 16px rgba(75, 214, 200, 0.75);
+    }
+
+    .hero h2 {
+      max-width: 760px;
+      margin: 0;
+      font-size: clamp(25px, 3.2vw, 45px);
+      line-height: 1.08;
+      letter-spacing: -0.045em;
+    }
+
+    .hero-summary {
+      max-width: 790px;
+      margin: 16px 0 0;
+      color: #b3bdd2;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    .hero-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+
+    .meta-chip {
+      padding: 7px 10px;
+      border: 1px solid rgba(151, 166, 207, 0.15);
+      border-radius: 999px;
+      color: #c6cfe4;
+      background: rgba(255, 255, 255, 0.045);
+      font-size: 11px;
+    }
+
+    .status-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+      border-radius: var(--radius-lg);
+    }
+
+    .status-label {
+      color: var(--muted-2);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .current-step-title {
+      margin: 12px 0 8px;
+      font-size: 19px;
+      line-height: 1.35;
+      letter-spacing: -0.025em;
+    }
+
+    .current-step-desc {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .progress-shell { margin-top: 18px; }
+
+    .progress-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .progress-bar {
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      box-shadow: 0 0 22px rgba(105, 130, 255, 0.45);
+      transition: width 360ms cubic-bezier(.2, .8, .2, 1);
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .flow-board {
+      min-width: 0;
+      overflow: hidden;
+      border-radius: var(--radius-lg);
+    }
+
+    .board-head,
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .board-head h3,
+    .panel-head h3 {
+      margin: 0;
+      font-size: 13px;
+      letter-spacing: -0.015em;
+    }
+
+    .board-head p,
+    .panel-head p {
+      margin: 4px 0 0;
+      color: var(--muted-2);
+      font-size: 10px;
+    }
+
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted-2);
+      font-size: 9px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+    }
+
+    .legend-dot.done { background: var(--success); }
+    .legend-dot.active { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+    .legend-dot.pending { background: #555e74; }
+
+    .board-scroll {
+      overflow: auto;
+      padding: 0 0 12px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(160, 172, 205, 0.28) transparent;
+    }
+
+    .lane-heads {
+      min-width: 980px;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(146px, 1fr));
+      border-bottom: 1px solid var(--border);
+      background:
+        linear-gradient(180deg, rgba(24, 32, 51, 0.94), rgba(14, 19, 31, 0.92));
+      box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.035);
+    }
+
+    .lane-head {
+      --lane-color: var(--accent);
+      position: relative;
+      padding: 13px 10px;
+      border-right: 1px solid rgba(151, 166, 207, 0.18);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--lane-color) 16%, transparent), transparent 74%),
+        radial-gradient(circle at 50% 0, color-mix(in srgb, var(--lane-color) 18%, transparent), transparent 62%);
+      text-align: center;
+    }
+
+    .lane-head:nth-child(1) { --lane-color: #7f8cff; }
+    .lane-head:nth-child(2) { --lane-color: #69b7ff; }
+    .lane-head:nth-child(3) { --lane-color: #4bd6c8; }
+    .lane-head:nth-child(4) { --lane-color: #7ee2a8; }
+    .lane-head:nth-child(5) { --lane-color: #ffbf69; }
+    .lane-head:nth-child(6) { --lane-color: #ff8db3; }
+
+    .lane-head:last-child { border-right: 0; }
+
+    .lane-head::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 10px;
+      right: 10px;
+      height: 3px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, transparent, var(--lane-color), transparent);
+      box-shadow: 0 0 16px color-mix(in srgb, var(--lane-color) 48%, transparent);
+    }
+
+    .lane-head strong {
+      display: block;
+      color: #f7f9ff;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      text-shadow: 0 0 16px color-mix(in srgb, var(--lane-color) 30%, transparent);
+    }
+
+    .lane-head span {
+      display: block;
+      margin-top: 3px;
+      color: #9faac2;
+      font-size: 8px;
+    }
+
+    .diagram-wrap {
+      position: relative;
+      min-width: 980px;
+      min-height: 480px;
+      padding: 16px 12px 28px;
+      background:
+        linear-gradient(
+          to right,
+          rgba(127, 140, 255, 0.078) 0,
+          rgba(127, 140, 255, 0.078) 16.666%,
+          rgba(105, 183, 255, 0.058) 16.666%,
+          rgba(105, 183, 255, 0.058) 33.333%,
+          rgba(75, 214, 200, 0.056) 33.333%,
+          rgba(75, 214, 200, 0.056) 50%,
+          rgba(126, 226, 168, 0.052) 50%,
+          rgba(126, 226, 168, 0.052) 66.666%,
+          rgba(255, 191, 105, 0.05) 66.666%,
+          rgba(255, 191, 105, 0.05) 83.333%,
+          rgba(255, 141, 179, 0.052) 83.333%,
+          rgba(255, 141, 179, 0.052) 100%
+        ),
+        repeating-linear-gradient(
+          to right,
+          transparent 0,
+          transparent calc(16.666% - 1px),
+          rgba(151, 166, 207, 0.14) calc(16.666% - 1px),
+          rgba(151, 166, 207, 0.14) 16.666%
+        );
+    }
+
+    .diagram-grid {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(146px, 1fr));
+      grid-auto-rows: minmax(94px, auto);
+      gap: 12px 12px;
+    }
+
+    .edge-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 6;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .edge {
+      fill: none;
+      stroke: rgba(126, 226, 168, 0.42);
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: stroke 240ms ease, opacity 240ms ease, filter 240ms ease;
+    }
+
+    .edge.done { stroke: rgba(126, 226, 168, 0.58); }
+
+    .edge.active {
+      stroke: url(#activeGradient);
+      stroke-width: 4;
+      filter:
+        drop-shadow(0 0 6px rgba(111, 128, 255, 0.72))
+        drop-shadow(0 0 12px rgba(91, 213, 255, 0.36));
+    }
+
+    .edge.cross-edge {
+      stroke: rgba(127, 140, 255, 0.56);
+      stroke-dasharray: 8 6;
+    }
+
+    .edge.cross-edge.incoming {
+      stroke: rgba(105, 183, 255, 0.64);
+    }
+
+    .edge.cross-edge.outgoing {
+      stroke: rgba(255, 191, 105, 0.66);
+    }
+
+    .step-node {
+      position: relative;
+      align-self: center;
+      min-width: 0;
+      min-height: 74px;
+      padding: 12px 12px 11px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(22, 29, 45, 0.84);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+      transition:
+        transform 260ms cubic-bezier(.2, .8, .2, 1),
+        border-color 260ms ease,
+        background 260ms ease,
+        opacity 260ms ease,
+        filter 260ms ease;
+    }
+
+    .step-node.context-node {
+      min-height: 68px;
+      border-style: dashed;
+      background: rgba(16, 22, 36, 0.78);
+    }
+
+    .step-node.incoming-node {
+      border-color: rgba(105, 183, 255, 0.36);
+    }
+
+    .step-node.outgoing-node {
+      border-color: rgba(255, 191, 105, 0.4);
+    }
+
+    .step-node.current-node {
+      border-color: rgba(151, 166, 207, 0.24);
+    }
+
+    .step-node.symbol-node {
+      border-radius: 10px;
+      border-color: rgba(75, 214, 200, 0.32);
+      background: rgba(18, 31, 42, 0.82);
+    }
+
+    .step-node.symbol-node.target-symbol {
+      border-color: rgba(75, 214, 200, 0.8);
+      box-shadow:
+        0 0 0 1px rgba(75, 214, 200, 0.22),
+        0 16px 38px rgba(0, 0, 0, 0.3);
+    }
+
+    .node-flow {
+      display: block;
+      min-width: 0;
+      margin-left: 7px;
+      overflow: hidden;
+      color: var(--muted-2);
+      font-size: 8px;
+      font-weight: 750;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .step-node.pending {
+      opacity: 0.44;
+      filter: saturate(0.65);
+    }
+
+    .step-node.done {
+      border-color: rgba(126, 226, 168, 0.28);
+      background: linear-gradient(145deg, rgba(31, 55, 52, 0.79), rgba(23, 31, 44, 0.84));
+    }
+
+    .step-node.active {
+      z-index: 5;
+      transform: translateY(-3px) scale(1.025);
+      border-color: rgba(140, 151, 255, 0.78);
+      background: linear-gradient(145deg, rgba(50, 60, 120, 0.93), rgba(23, 49, 58, 0.9));
+      box-shadow:
+        0 18px 42px rgba(0, 0, 0, 0.34),
+        0 0 0 1px rgba(140, 151, 255, 0.2),
+        0 0 34px rgba(105, 125, 255, 0.18);
+    }
+
+    .node-topline {
+      display: flex;
+      align-items: center;
+      margin-bottom: 7px;
+    }
+
+    .node-seq {
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.06);
+      font-size: 9px;
+      font-weight: 850;
+    }
+
+    .step-node.active .node-seq {
+      color: #fff;
+      background: linear-gradient(145deg, var(--accent), var(--accent-2));
+    }
+
+    .node-title {
+      overflow: hidden;
+      color: #e9edfa;
+      font-size: 11px;
+      font-weight: 760;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+    }
+
+    .node-code {
+      overflow: hidden;
+      margin-top: 5px;
+      color: #a7b4d1;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 8px;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .symbol-search-section {
+      margin: 10px 0 16px;
+      padding: 10px;
+      border: 1px solid rgba(151, 166, 207, 0.14);
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .symbol-search-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      color: #dce4f7;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .symbol-search-item {
+      width: 100%;
+      display: grid;
+      gap: 3px;
+      margin-top: 6px;
+      padding: 9px;
+      border: 1px solid rgba(151, 166, 207, 0.12);
+      color: inherit;
+      background: rgba(10, 14, 24, 0.5);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .symbol-search-item:hover {
+      border-color: rgba(75, 214, 200, 0.4);
+      background: rgba(75, 214, 200, 0.08);
+    }
+
+    .symbol-search-item strong {
+      overflow: hidden;
+      color: #edf4ff;
+      font-size: 10px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .symbol-search-item span,
+    .symbol-search-item code {
+      overflow: hidden;
+      color: var(--muted-2);
+      font-size: 8px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .side-stack {
+      display: grid;
+      gap: 18px;
+      position: sticky;
+      top: 88px;
+    }
+
+    .detail-panel,
+    .log-panel {
+      overflow: hidden;
+      border-radius: var(--radius-lg);
+    }
+
+    .detail-body { padding: 16px 18px 18px; }
+
+    .detail-section + .detail-section { margin-top: 16px; }
+
+    .detail-kicker {
+      margin-bottom: 5px;
+      color: var(--muted-2);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .detail-value {
+      color: #dce3f5;
+      font-size: 11px;
+      line-height: 1.7;
+      word-break: break-word;
+    }
+
+    .detail-chip-list,
+    .detail-edge-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .detail-chip {
+      max-width: 100%;
+      padding: 5px 8px;
+      border: 1px solid rgba(151, 166, 207, 0.14);
+      border-radius: 999px;
+      color: #cdd6ef;
+      background: rgba(255, 255, 255, 0.045);
+      font-size: 9px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    .detail-edge-list {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    .detail-edge-card {
+      display: grid;
+      gap: 5px;
+      padding: 8px;
+      border: 1px solid rgba(127, 140, 255, 0.18);
+      border-radius: 8px;
+      background: rgba(127, 140, 255, 0.06);
+    }
+
+    .detail-edge-card strong,
+    .detail-edge-card span,
+    .detail-edge-card code {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .detail-edge-card strong {
+      color: #eef2ff;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .detail-edge-card span {
+      color: var(--muted);
+      font-size: 9px;
+      line-height: 1.45;
+    }
+
+    .detail-edge-card code {
+      color: #9fb3da;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 8px;
+      line-height: 1.45;
+    }
+
+    .source-path {
+      display: block;
+      padding: 9px 10px;
+      border: 1px solid rgba(151, 166, 207, 0.13);
+      border-radius: 10px;
+      color: #b8c4e0;
+      background: rgba(0, 0, 0, 0.16);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 9px;
+      line-height: 1.5;
+      word-break: break-all;
+    }
+
+    .log-body {
+      max-height: 278px;
+      overflow: auto;
+      padding: 11px 13px 14px;
+      background: rgba(1, 4, 9, 0.34);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(160, 172, 205, 0.28) transparent;
+    }
+
+    .log-entry:last-child { border-bottom: 0; }
+    .log-time { color: #606b82; }
+    .log-lane { color: var(--accent-2); }
+    .log-entry.current { color: #e5eaff; background: rgba(127, 140, 255, 0.07); }
+
+    .log-entry {
+      border: 0;
+      text-align: left;
+      width: 100%;
+      appearance: none;
+      cursor: pointer;
+      display: grid;
+      grid-template-columns: 48px 54px minmax(0, 1fr);
+      gap: 8px;
+      padding: 7px 5px;
+      border-bottom: 1px solid rgba(151, 166, 207, 0.08);
+      color: #a8b3cc;
+      font-size: 8px;
+      line-height: 1.55;
+      background: transparent;
+    }
+
+    .log-entry:hover { background: rgba(255, 255, 255, 0.032); }
+
+    .log-entry.current { color: #e5eaff; background: rgba(127, 140, 255, 0.07); }
+
+    .empty-state {
+      padding: 36px 20px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 12px;
+    }
+
+    .footer-note {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      margin-top: 16px;
+      padding: 0 4px 10px;
+      color: var(--muted-2);
+      font-size: 9px;
+      line-height: 1.6;
+    }
+
+    .mobile-menu-button { display: none; }
+
+    @media (max-width: 1180px) {
+      :root { --sidebar-width: 310px; }
+      .content-grid { grid-template-columns: minmax(0, 1fr); }
+      .flow-relation-layout { grid-template-columns: 1fr; }
+      .flow-current-card { order: -1; }
+      .side-stack {
+        position: static;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 900px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: min(86vw, 330px);
+        transform: translateX(-105%);
+        transition: transform 220ms ease;
+        box-shadow: 20px 0 60px rgba(0,0,0,.5);
+      }
+      .sidebar.open { transform: translateX(0); }
+      .mobile-menu-button { display: inline-flex; }
+      .main { padding: 14px; }
+      .topbar { top: 8px; }
+      .hero { grid-template-columns: 1fr; }
+      .hero-card { min-height: auto; }
+      .side-stack { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 620px) {
+      .topbar { align-items: flex-start; }
+      .breadcrumb { padding-top: 7px; }
+      .controls { gap: 6px; }
+      .control-button span.label { display: none; }
+      .toggle-control span { display: none; }
+      .hero-card, .status-card { padding: 19px; }
+      .flow-relation-map { padding: 12px; }
+      .hero h2 { font-size: 28px; }
+      .hero-summary { font-size: 12px; }
+      .legend { display: none; }
+      .footer-note { flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="鍮꾩쫰?덉뒪 ?먮쫫 ?좏깮">
+      <div class="brand">
+        <div class="brand-row">
+          <div class="brand-mark" aria-hidden="true">MP</div>
+          <div>
+            <h1>MindPhase Lifecycle</h1>
+            <p>?낅┰ ?ㅽ뻾??鍮꾩쫰?덉뒪 濡쒖쭅 ?좊땲硫붿씠??/p>
+          </div>
+        </div>
+      </div>
+      <div class="search-wrap">
+        <input id="flowSearch" type="search" placeholder="?먮쫫, 紐낅졊, ?뚯씪 寃?? autocomplete="off" />
+        <div class="relation-toolbar">
+          <div>
+            <strong>Flow ?곌껐</strong>
+            <span>?꾩옱 flow??吏곸젒 ?곌껐 ?쒖떆</span>
+          </div>
+          <button class="relation-toggle active" id="relationToggle" type="button" aria-pressed="true">ON</button>
+        </div>
+        <div class="relation-legend" aria-label="Flow 愿怨??좏삎">
+          <span><i class="relation-swatch call"></i>?몄텧</span>
+          <span><i class="relation-swatch event"></i>?대깽??/span>
+          <span><i class="relation-swatch sync"></i>?숆린??/span>
+          <span><i class="relation-swatch cleanup"></i>?뺣━</span>
+        </div>
+      </div>
+      <nav class="flow-list" id="flowList"></nav>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumb">
+          <button class="control-button mobile-menu-button" id="menuButton" aria-label="?먮쫫 紐⑸줉 ?닿린">??/button>
+          <span id="groupCrumb">App Lifecycle</span>
+          <span>??/span>
+          <strong id="flowCrumb">Rust / Tauri 遺?몄뒪?몃옪</strong>
+        </div>
+        <div class="controls" aria-label="?좊땲硫붿씠??而⑦듃濡?>
+          <button class="control-button" id="prevButton" title="?댁쟾 ?④퀎 (??">??<span class="label">?댁쟾</span></button>
+          <button class="control-button primary" id="playButton" title="?ъ깮/?쇱떆?뺤? (Space)">??<span class="label">?ъ깮</span></button>
+          <button class="control-button" id="nextButton" title="?ㅼ쓬 ?④퀎 (??"><span class="label">?ㅼ쓬</span> ??/button>
+          <select class="select-control" id="speedSelect" title="?ъ깮 ?띾룄">
+            <option value="2200">0.6횞</option>
+            <option value="1500" selected>1횞</option>
+            <option value="900">1.6횞</option>
+            <option value="520">2.6횞</option>
+          </select>
+          <label class="toggle-control" title="留덉?留??④퀎 ?댄썑 ?ㅼ쓬 ?먮쫫?쇰줈 ?대룞">
+            <input id="loopToggle" type="checkbox" checked />
+            <span>?꾩껜 ?쒗솚</span>
+          </label>
+        </div>
+      </header>
+
+      <section class="hero">
+        <article class="hero-card">
+          <div class="eyebrow" id="flowGroup">App Lifecycle</div>
+          <h2 id="flowTitle">Rust / Tauri 遺?몄뒪?몃옪</h2>
+          <p class="hero-summary" id="flowSummary"></p>
+          <div class="hero-meta" id="heroMeta"></div>
+        </article>
+        <article class="status-card" aria-live="polite">
+          <div>
+            <div class="status-label">?꾩옱 ?ㅽ뻾 ?④퀎</div>
+            <div class="current-step-title" id="currentStepTitle"></div>
+            <div class="current-step-desc" id="currentStepDesc"></div>
+          </div>
+          <div class="progress-shell">
+            <div class="progress-meta">
+              <span id="progressLabel">1 / 1</span>
+              <span id="progressPercent">100%</span>
+            </div>
+            <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="flow-board">
+          <div class="board-head">
+            <div>
+              <h3>?몄텧 愿怨??좊땲硫붿씠??/h3>
+              <p>媛濡??덉씤? 梨낆엫 怨꾩링, ?몃줈 ?쒖꽌???ㅽ뻾 ?쒖꽌瑜??섎??⑸땲??</p>
+            </div>
+            <div class="legend" aria-label="?곹깭 踰붾?">
+              <span class="legend-item"><i class="legend-dot done"></i>?꾨즺</span>
+              <span class="legend-item"><i class="legend-dot active"></i>?ㅽ뻾 以?/span>
+              <span class="legend-item"><i class="legend-dot pending"></i>?湲?/span>
+            </div>
+          </div>
+          <div class="flow-relation-map" id="flowRelationMap" aria-live="polite"></div>
+          <div class="board-scroll" id="boardScroll">
+            <div class="lane-heads" id="laneHeads"></div>
+            <div class="diagram-wrap" id="diagramWrap">
+              <svg class="edge-layer" id="edgeLayer" aria-hidden="true">
+                <defs>
+                  <linearGradient id="activeGradient" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stop-color="#7f8cff" />
+                    <stop offset="100%" stop-color="#4bd6c8" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div class="diagram-grid" id="diagramGrid"></div>
+            </div>
+          </div>
+        </article>
+
+        <aside class="side-stack">
+          <article class="detail-panel">
+            <div class="panel-head">
+              <div>
+                <h3>Active Step ?곸꽭</h3>
+                <p>?좏깮??step-node????븷, ?몄텧, Function I/O</p>
+              </div>
+            </div>
+            <div class="detail-body">
+              <div class="detail-section">
+                <div class="detail-kicker">梨낆엫</div>
+                <div class="detail-value" id="detailRole"></div>
+              </div>
+              <div class="detail-section">
+                <div class="detail-kicker">?몄텧 / ?대깽??/div>
+                <div class="detail-value" id="detailCall"></div>
+              </div>
+              <div class="detail-section">
+                <div class="detail-kicker">?뚯뒪 寃쎈줈</div>
+                <code class="source-path" id="detailSource"></code>
+              </div>
+              <div class="detail-section">
+                <div class="detail-kicker">Function Inputs</div>
+                <div class="detail-chip-list" id="detailInputs"></div>
+              </div>
+              <div class="detail-section">
+                <div class="detail-kicker">Function Outputs</div>
+                <div class="detail-chip-list" id="detailOutputs"></div>
+              </div>
+              <div class="detail-section">
+                <div class="detail-kicker">Function Edges</div>
+                <div class="detail-edge-list" id="detailEdges"></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="log-panel">
+            <div class="panel-head">
+              <div>
+                <h3>?ㅽ뻾 濡쒓렇</h3>
+                <p>?꾩옱 ?먮쫫???꾩쟻 ?몄텧 湲곕줉</p>
+              </div>
+              <button class="control-button" id="resetButton" title="?꾩옱 ?먮쫫 泥섏쓬遺??>??/button>
+            </div>
+            <div class="log-body" id="logBody"></div>
+          </article>
+        </aside>
+
+      </section>
+
+      <footer class="footer-note">
+        <span>?ㅻ낫?? Space ?ъ깮/?쇱떆?뺤? 쨌 ?????④퀎 ?대룞 쨌 Home 泥섏쓬 쨌 End 留덉?留?/span>
+        <span>?⑥씪 HTML 쨌 洹몃９ CALL/TRIGGER/EVENT/SYNC 愿怨??ы븿 쨌 濡쒖뺄 ?뚯씪, localhost, CodePen/JSFiddle ?ㅽ뻾 媛??/span>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    const LANES = [
+      { id: 'entry', label: 'Trigger / UI', sub: '?ъ슜?먃룹떆?ㅽ뀥 ?대깽?? },
+      { id: 'page', label: 'Page Runtime', sub: 'Controller 쨌 Action 쨌 Runtime' },
+      { id: 'feature', label: 'Application', sub: 'Feature 쨌 Domain Service' },
+      { id: 'ipc', label: 'Service / IPC', sub: 'Client 쨌 CommandTransport' },
+      { id: 'rust', label: 'Rust Backend', sub: 'Tauri Command 쨌 AppState' },
+      { id: 'infra', label: 'Infrastructure', sub: 'DB 쨌 FS 쨌 Indexer 쨌 Renderer' },
+    ];
+
+    const FLOWS = [
+      {
+        id: 'tauri-bootstrap', group: 'App Lifecycle', title: 'Rust / Tauri 遺?몄뒪?몃옪',
+        summary: '?꾨줈?몄뒪 ?쒖옉 ??Tauri command registry瑜??깅줉?섍퀬 ?곗씠?곕쿋?댁뒪, 湲곕낯 ?뚰겕?ㅽ럹?댁뒪, ?됱씤, ?뚯씪 媛먯떆湲곕? 以鍮꾪븯??諛깆뿏???쒖옉 lifecycle?낅땲??',
+        trigger: '?좏뵆由ъ??댁뀡 ?꾨줈?몄뒪 ?쒖옉', result: 'IPC 紐낅졊??諛쏆쓣 ???덈뒗 諛깆뿏?쒖? ?뚯씪 媛먯떆媛 以鍮꾨맖',
+        tags: ['startup', 'db', 'indexer', 'file watcher'],
+        steps: [
+          S('entry', '?꾨줈?몄뒪 ?쒖옉', 'main / run()', '?댁쁺泥댁젣 ?먮뒗 媛쒕컻 ?곗쿂媛 MindPhase ?꾨줈?몄뒪瑜??ㅽ뻾?⑸땲??', 'run()', 'src-tauri/src/lib.rs', 'Tauri bootstrap 吏꾩엯'),
+          S('rust', '紐낅졊 registry ?앹꽦', 'mindphase_command_registry!()', '紐⑤뱺 Tauri command瑜?generate_handler???깅줉?⑸땲??', 'run_with_handler(mindphase_command_registry!())', 'src-tauri/src/app/command_registry.rs', 'IPC ?쇱슦???뚯씠釉??앹꽦'),
+          S('rust', 'Tauri Builder 援ъ꽦', 'Builder::default()', 'dialog/opener plugin怨?AppState, invoke handler瑜??깅줉?⑸땲??', '.plugin(...).manage(AppState::build()).invoke_handler(...)', 'src-tauri/src/app/bootstrap.rs', '?좏뵆由ъ??댁뀡 而⑦뀒?대꼫 援ъ꽦'),
+          S('infra', 'DB ?곌껐 珥덇린??, 'db::connection::init', '濡쒖뺄 ?곗씠?곕쿋?댁뒪 ?곌껐怨??곹깭瑜?以鍮꾪빀?덈떎.', 'db::connection::init(app.handle())', 'src-tauri/src/app/bootstrap.rs', 'DB ?ъ슜 媛??),
+          S('infra', '留덉씠洹몃젅?댁뀡 ?ㅽ뻾', 'db::migrations::run', '?꾩옱 ?ㅽ궎留?踰꾩쟾??留욎떠 ?곗씠?곕쿋?댁뒪瑜?留덉씠洹몃젅?댁뀡?⑸땲??', 'db::migrations::run(app.handle())', 'src-tauri/src/app/bootstrap.rs', '?ㅽ궎留?理쒖떊??),
+          S('infra', '湲곕낯 workspace 蹂댁옣', 'ensure_workspace_context', 'main ?덈룄?곌? 李몄“??湲곕낯 workspace context瑜??앹꽦?섍굅??蹂듦뎄?⑸땲??', 'ensure_workspace_context(..., "main")', 'src-tauri/src/app/bootstrap.rs', '?쒖꽦 workspace context ?뺣낫'),
+          S('infra', '珥덇린 ?됱씤', 'reindex_workspace', 'workspace ?뚯씪怨?臾몄꽌 ?뺣낫瑜?理쒖큹 ?숆린?뷀빀?덈떎.', 'indexer::reindex::reindex_workspace(...)', 'src-tauri/src/app/bootstrap.rs', '寃??洹몃옒??snapshot 以鍮?),
+          S('infra', '?뚯씪 媛먯떆湲??쒖옉', 'file_watcher::start', '?뚯씪 ?쒖뒪??蹂寃쎌쓣 媛먯????댄썑 incremental reindex ?대깽?몃? 留뚮벊?덈떎.', 'indexer::file_watcher::start(app.handle())', 'src-tauri/src/app/bootstrap.rs', '?ㅼ떆媛?蹂寃?媛먯떆 ?쒖옉'),
+          S('rust', 'Tauri event loop ?쒖옉', '.run(generate_context!())', '?덈룄?곗? IPC event loop瑜??ㅽ뻾?⑸땲??', '.run(tauri::generate_context!())', 'src-tauri/src/app/bootstrap.rs', '諛깆뿏???ㅽ뻾 ?곹깭 吏꾩엯'),
+        ]
+      },
+      {
+        id: 'frontend-composition', group: 'App Lifecycle', title: 'Frontend Application Composition',
+        summary: 'PageRoute媛 ?ъ슜??application facade, feature, client, transport瑜??앹꽦?섍퀬 ?섏〈?깆쓣 議곕┰?섎뒗 ?꾨줎?몄뿏??composition root ?먮쫫?낅땲??',
+        trigger: 'PageRoute ?쒕퉬???앹꽦', result: 'workspace/document/editor/settings/collaboration/community API 以鍮?,
+        tags: ['composition root', 'dependency injection', 'feature facade'],
+        steps: [
+          S('page', 'PageRoute ?쒕퉬???붿껌', 'createPageRouteServices()', '?쇱슦??runtime???꾨떖???⑥닔???쒕퉬???ы듃瑜??앹꽦?⑸땲??', 'createPageRouteServices()', 'src/lib/page/page-route-runtime-wiring.ts', 'Application composition ?쒖옉'),
+          S('feature', 'MindPhaseApp ?앹꽦', 'createMindPhaseApp()', '紐⑤뱺 ?곸쐞 feature facade瑜?議곕┰?⑸땲??', 'createMindPhaseApp()', 'src/lib/app/mindphase-app.ts', 'Application root ?앹꽦'),
+          S('ipc', '怨듭슜 transport ?앹꽦', 'new TauriCommandTransport()', '??client 怨꾩링??怨듭쑀??Tauri IPC transport瑜?留뚮벊?덈떎.', 'const transport = new TauriCommandTransport()', 'src/lib/app/mindphase-app.ts', 'IPC ?ы듃 以鍮?),
+          S('feature', 'WorkspaceFeature 議곕┰', 'WorkspaceClient + SearchClient + IndexingClient', 'registry, tree, entries, search ?섏쐞 facade瑜?援ъ꽦?⑸땲??', 'new WorkspaceFeature(...)', 'src/lib/features/workspace/WorkspaceFeature.ts', 'Workspace API 以鍮?),
+          S('feature', 'DocumentFeature 議곕┰', 'MarkdownDocumentService', '臾몄꽌 read/save/rename/media API瑜?援ъ꽦?⑸땲??', 'new DocumentFeature(new MarkdownDocumentService(...))', 'src/lib/features/documents/DocumentFeature.ts', 'Document API 以鍮?),
+          S('feature', 'EditorFeature ?곌껐', 'new EditorFeature(documents)', '?숈씪??DocumentFeature瑜?李몄“?섎뒗 ?꾩옱 臾몄꽌 ?곹깭 facade瑜?留뚮벊?덈떎.', 'new EditorFeature(documents)', 'src/lib/features/editor/EditorFeature.ts', 'Editor facade 以鍮?),
+          S('feature', 'Graph / Settings 議곕┰', 'GraphFeature + SettingsFeature', '?좏깮 ?곹깭 facade? zoom/theme feature瑜?以鍮꾪빀?덈떎.', 'new GraphFeature(); createSettingsFeature(transport)', 'src/lib/app/mindphase-app.ts', 'Graph/settings API 以鍮?),
+          S('feature', 'Collaboration / Community 議곕┰', 'CollaborationFeature + CommunityFeature', '?묒뾽 service bundle怨?而ㅻ??덊떚 catalog API瑜?以鍮꾪빀?덈떎.', 'new CollaborationFeature(); new CommunityFeature()', 'src/lib/app/mindphase-app.ts', '?뺤옣 湲곕뒫 API 以鍮?),
+          S('page', '?⑥닔???ы듃 ?몄텧', 'PageRouteServices', 'feature 硫붿꽌?쒖? chat/system service瑜?Page runtime??二쇱엯?⑸땲??', 'return { addWorkspace, readDocument, saveDocument, ... }', 'src/lib/page/page-route-runtime-wiring.ts', 'Page runtime ?몄텧 以鍮??꾨즺'),
+        ]
+      },
+      {
+        id: 'page-mount', group: 'App Lifecycle', title: 'Page Mount & Durable State Load',
+        summary: 'Svelte onMount ??focus event瑜??곌껐?섍퀬 媛곸쥌 ?곸냽 ?ㅼ젙怨?workspace tree瑜?鍮꾨룞湲곕줈 濡쒕뱶????engine initialization???쒖옉?⑸땲??',
+        trigger: 'PageRoute 而댄룷?뚰듃 mount', result: '?붾㈃ ?곹깭? ?곸냽 ?ㅼ젙??蹂듭썝?섍퀬 engine 珥덇린?붽? 吏꾪뻾??,
+        tags: ['onMount', 'durable state', 'controllers'],
+        steps: [
+          S('entry', 'Svelte mount', 'onMount()', 'PageRoute DOM???앹꽦?섎ŉ mounted lifecycle???ㅽ뻾?⑸땲??', 'registerPageMountedLifecycle()', 'src/lib/page/page-route-lifecycle.svelte.ts', '?섏씠吏 lifecycle ?쒖옉'),
+          S('page', 'Page lifecycle ?앹꽦', 'createPageLifecyclePageRuntime', 'focus handler, durable loaders, engine, cleanup ?ы듃瑜??섎굹??runtime?쇰줈 臾띠뒿?덈떎.', 'createPageLifecyclePageRuntime({...})', 'src/lib/page/page-lifecycle.ts', 'lifecycle ?낅젰 援ъ꽦'),
+          S('page', 'Focus event ?깅줉', 'registerAppShellFocusEvents', 'editor focus? app shell pointer/focus ?곹깭瑜?異붿쟻?⑸땲??', 'registerAppShellFocusEvents(...)', 'src/lib/page/page-lifecycle.ts', 'focus ?대깽???곌껐'),
+          S('page', 'UI ?ㅼ젙 濡쒕뱶', 'appearance/callout/tree/chat/graph', '媛?controller媛 browser cache? durable snapshot???숆린?뷀빀?덈떎.', 'loadDurableState()', 'src/lib/page/page-lifecycle.ts', '?쒓컖/?낅젰 ?ㅼ젙 蹂듭썝'),
+          S('feature', 'Theme / Zoom 濡쒕뱶', 'appTheme.load + appZoom.load', '??λ맂 theme CSS? webview zoom???곸슜?⑸땲??', 'controllers.appTheme.load(); controllers.appZoom.load()', 'src/lib/page/page-route-lifecycle.svelte.ts', '?뚮쭏쨌諛곗쑉 ?곸슜'),
+          S('feature', 'Community / Shortcut 濡쒕뱶', 'community.load + shortcutSettings.load', 'catalog, ?ㅼ튂 ??ぉ, shortcut ?ㅼ젙??濡쒕뱶?⑸땲??', 'controllers.community.load(); shortcutSettings.load()', 'src/lib/page/page-route-lifecycle.svelte.ts', '?뺤옣/?⑥텞???곹깭 蹂듭썝'),
+          S('page', 'Workspace ?곹깭 濡쒕뱶', 'workspaceSettings + workspaceTree', '?깅줉 workspace 紐⑸줉怨??꾩옱 tree瑜?濡쒕뱶?⑸땲??', 'durableLoaders.workspaceSettings(); workspaceTree()', 'src/lib/page/page-lifecycle.ts', 'workspace ?붾㈃ ?곗씠??以鍮?),
+          S('page', 'Engine init ?쒖옉', 'void runPageEngineInit()', '?ㅼ젙 濡쒕뱶? 蹂묐젹濡?renderer/graph engine initialization???쒖옉?⑸땲??', 'runPageEngineInit({...})', 'src/lib/page/page-lifecycle.ts', 'Canvas engine 珥덇린??吏꾩엯'),
+        ]
+      },
+      {
+        id: 'engine-init', group: 'App Lifecycle', title: 'Renderer & Graph Engine Initialization',
+        summary: '?뚮뜑 backend, camera, viewport, grid, GraphRuntime???쒖꽌?濡??앹꽦?섍퀬 graph snapshot, editor session, ?낅젰 ?대깽?몃? ?곌껐?⑸땲??',
+        trigger: 'runPageEngineInit()', result: '珥덇린 graph frame??洹몃┫ ???덈뒗 interactive canvas 以鍮?,
+        tags: ['WebGPU/WebGL2', 'GraphRuntime', 'canvas'],
+        steps: [
+          S('page', 'Renderer ?붿껌', 'createRenderer(canvas)', '?섍꼍???곕씪 WebGPU ?먮뒗 WebGL2 backend瑜??앹꽦?⑸땲??', 'createdBackend = await createRenderer(input.canvas)', 'src/lib/page/page-engine-init.ts', 'RenderBackend ?앹꽦'),
+          S('infra', 'Backend 以鍮?, 'WebGPU / WebGL2', 'canvas render context? GPU ?먯썝??珥덇린?뷀빀?덈떎.', 'backend.kind', 'src/lib/engine/render/BackendFactory.ts', '?뚮뜑 backend ready'),
+          S('page', 'Camera / viewport ?앹꽦', 'new Camera + initialViewport', '珥덇린 移대찓?쇱? DPR 湲곕컲 viewport瑜??ㅼ젙?⑸땲??', 'new Camera(0,0,1); setViewport(...)', 'src/lib/page/page-engine-init.ts', '醫뚰몴怨?以鍮?),
+          S('page', 'GridRenderer 珥덇린??, 'new GridRenderer()', '?꾩옱 grid style???ъ슜??諛곌꼍 grid renderer瑜??앹꽦?⑸땲??', 'gridRenderer.init(createdBackend)', 'src/lib/page/page-engine-init.ts', 'grid layer 以鍮?),
+          S('feature', 'GraphRuntime ?앹꽦', 'new GraphRuntime()', '洹몃옒???곗씠?? worker, selection, render orchestration runtime???앹꽦?⑸땲??', 'createdRuntime = new GraphRuntime()', 'src/lib/graph/core/GraphRuntime.ts', 'Graph runtime ?몄뒪?댁뒪 ?앹꽦'),
+          S('feature', 'Graph ?ㅼ젙 ?곸슜', 'applyGraphRuntimeSettings', '臾쇰━, visibility, link, tag, local graph ?ㅼ젙怨?render invalidator瑜?二쇱엯?⑸땲??', 'applyGraphRuntimeSettings(createdRuntime, {...})', 'src/lib/page/graph-runtime-settings.ts', 'Graph ?숈옉 ?뺤콉 ?곸슜'),
+          S('ipc', 'Graph snapshot ?붿껌', 'get_document_graph', 'DocumentGraphRepository媛 backend snapshot???붿껌?⑸땲??', 'invokeCommand(commandNames.getDocumentGraph)', 'src/lib/graph/data/DocumentGraphRepository.ts', 'Graph IPC ?붿껌'),
+          S('rust', 'Graph command 泥섎━', 'get_document_graph', 'AppState index service媛 ?꾩옱 workspace graph snapshot??議고쉶?⑸땲??', 'state.index.get_document_graph(...)', 'src-tauri/src/commands/index_commands.rs', 'Snapshot ?앹꽦'),
+          S('infra', 'GraphRuntime init', 'apply snapshot + worker start', 'snapshot???곸슜?섍퀬 simulation worker瑜??쒖옉????graph瑜?sync?⑸땲??', 'GraphRuntime.init(backend)', 'src/lib/graph/core/GraphRuntime.ts', 'Graph ?곗씠??worker 以鍮?),
+          S('page', '?몄뀡쨌?대깽???곌껐', 'restore + bind + observe + listen', 'editor session 蹂듭썝, input handler, resize observer, drag/drop/index ?대깽?몃? ?깅줉?⑸땲??', 'restoreEditorSessionState(); registerCanvasEngineEvents(...)', 'src/lib/page/page-engine-init.ts', 'Interactive engine 以鍮?),
+          S('page', '珥덇린 render ?붿껌', 'requestRender("initial")', 'frame clock??珥덇린?뷀븯怨?泥?frame???덉빟?⑸땲??', 'input.requestRender("initial")', 'src/lib/page/page-engine-init.ts', '泥??꾨젅???덉빟'),
+        ]
+      },
+      {
+        id: 'render-loop', group: 'App Lifecycle', title: 'Graph Render Loop',
+        summary: '?곹깭 蹂寃쎌씠 ?덉쓣 ?뚮쭔 requestAnimationFrame???덉빟?섍퀬 camera, grid, graph, editor occupancy, HUD, overlay瑜????꾨젅???덉뿉???숆린?뷀빀?덈떎.',
+        trigger: 'requestRender(reason)', result: 'GPU frame怨?DOM overlay媛 ?쇨????곹깭濡?媛깆떊??,
+        tags: ['requestAnimationFrame', 'render invalidation', 'HUD'],
+        steps: [
+          S('entry', '?곹깭 蹂寃?諛쒖깮', 'requestRender(reason)', 'camera, graph, editor, resize ?깆뿉??render invalidation???붿껌?⑸땲??', 'requestRender("graph-runtime")', 'src/lib/page/page-render-scheduler.ts', '?꾨젅???붿껌 諛쒖깮'),
+          S('page', 'Frame 以묐났 ?쒓굅', 'PageRenderScheduler.request', '?대? ?덉빟??frame???덉쑝硫?異붽? RAF瑜?留뚮뱾吏 ?딆뒿?덈떎.', 'if (frameId !== 0) return', 'src/lib/page/page-render-scheduler.ts', '?⑥씪 frame ?덉빟'),
+          S('infra', 'RAF callback', 'renderFrame(now)', '釉뚮씪?곗? animation frame ?쒖젏???뚮뜑 ?⑥닔瑜??몄텧?⑸땲??', 'requestAnimationFrame(this.renderFrame)', 'src/lib/page/page-render-scheduler.ts', '?꾨젅???ㅽ뻾'),
+          S('page', 'Camera 媛깆떊', 'camera.update(dt)', 'delta time?쇰줈 camera animation怨?viewport ?곹깭瑜?媛깆떊?⑸땲??', 'camera.update(dt, viewport)', 'src/lib/page/page-render-scheduler.ts', 'Camera state 怨꾩궛'),
+          S('feature', 'Graph ?곹깭 媛깆떊', 'graphRuntime.update', 'worker 寃곌낵, overlay projection, LOD, selection ?곹깭瑜?諛섏쁺?⑸땲??', 'graphRuntime?.update(camera, viewport)', 'src/lib/graph/core/GraphRuntime.ts', 'Graph frame state 以鍮?),
+          S('page', 'Editor occupancy ?숆린??, 'syncEditorOccupanciesWithRuntime', '?대┛ editor window媛 李⑥??섎뒗 graph 怨듦컙??runtime??諛섏쁺?⑸땲??', 'syncEditorOccupanciesWithRuntime()', 'src/lib/page/page-render-scheduler.ts', 'Graph/editor 異⑸룎 ?곹깭 媛깆떊'),
+          S('infra', 'GPU draw', 'beginFrame ??grid.draw ??graph.draw', '諛곌꼍??clear?섍퀬 grid? graph renderer瑜??쒖꽌?濡?洹몃┰?덈떎.', 'backend.beginFrame(); gridRenderer.draw(); graphRuntime.draw()', 'src/lib/page/page-render-scheduler.ts', 'Canvas frame 異쒕젰'),
+          S('page', 'HUD / overlay 媛깆떊', 'syncGraphHud + refreshOverlaySnapshots', 'DOM 湲곕컲 label, editor overlay, HUD snapshot??媛깆떊?⑸땲??', 'syncGraphHudFromRuntime(); refreshOverlaySnapshots()', 'src/lib/page/page-render-scheduler.ts', 'Canvas/DOM ?쇱튂'),
+          S('page', '?곗냽 ?뚮뜑 ?먯젙', 'shouldContinueRendering', 'camera animation, drag, resize, motion ghost媛 ?덉쑝硫??ㅼ쓬 frame???붿껌?⑸땲??', 'requestRender("continuous-state")', 'src/lib/page/page-render-scheduler.ts', '?꾩슂 ???뚮뜑 諛섎났'),
+        ]
+      },
+      {
+        id: 'workspace-registry', group: 'Workspace', title: 'Workspace ?깅줉쨌?꾪솚쨌??젣',
+        summary: '?ㅼ젙 ?⑤꼸?먯꽌 workspace 紐⑸줉??遺덈윭?ㅺ퀬 ??寃쎈줈瑜??깅줉?섍굅???쒖꽦 workspace瑜??꾪솚쨌??젣????tree, graph, theme瑜??④퍡 ?щ룞湲고솕?⑸땲??',
+        trigger: 'Workspace settings ?ъ슜???≪뀡', result: '?깅줉 紐⑸줉怨??쒖꽦 workspace ?붾㈃???쇨??섍쾶 媛깆떊??,
+        tags: ['list', 'add', 'activate', 'remove'],
+        steps: [
+          S('entry', 'Workspace ?ㅼ젙 ?≪뀡', 'load / add / switch / remove', '?ъ슜?먭? workspace ?ㅼ젙 ?⑤꼸?먯꽌 ?묒뾽???좏깮?⑸땲??', 'workspaceSettingsActions.*', 'src/lib/page/workspace-settings-actions.ts', 'Workspace workflow ?쒖옉'),
+          S('page', 'Controller ?곹깭 ?쒖옉', 'beginLoad/BeginAdd/BeginSwitch', 'loading, switching, removing ?곹깭? ???ID瑜??ㅼ젙?⑸땲??', 'workspacePanel.begin*()', 'src/lib/page/workspace-management-runtime.ts', 'UI pending ?곹깭'),
+          S('feature', 'WorkspaceRegistry ?몄텧', 'list/add/activate/remove', 'WorkspaceFeature registry facade媛 client瑜??몄텧?⑸땲??', 'app.workspace.registry.*', 'src/lib/features/workspace/WorkspaceFeature.ts', 'Application workspace ?몄텧'),
+          S('ipc', 'WorkspaceClient invoke', 'list_workspaces / add_workspace / set_active_workspace / remove_workspace', '?몄텧??command name怨?DTO濡?蹂?섑빀?덈떎.', 'transport.invoke(commandNames.*)', 'src/lib/services/workspace-client.ts', 'Tauri IPC ?꾩넚'),
+          S('rust', 'Registry command 泥섎━', 'index_commands.rs', 'AppState index service? workspace_registry_service媛 ?묒뾽???섑뻾?⑸땲??', 'state.index.*workspace(...)', 'src-tauri/src/commands/index_commands.rs', 'Workspace registry 蹂寃?),
+          S('infra', 'DB / file watcher 媛깆떊', 'workspace DB + watcher.restart', '?깅줉 ?뺣낫 ????????workspace瑜?媛먯떆?섎룄濡?watcher瑜??ъ떆?묓빀?덈떎.', 'TauriWorkspaceRegistryWatcher.restart()', 'src-tauri/src/commands/index_commands.rs', '諛깆뿏??context ?꾪솚'),
+          S('page', '?붾㈃ reset 諛?reload', 'resetView + loadTree + reloadGraph', '?좏깮/移대찓??editor ?곹깭瑜??뺣━?섍퀬 ??workspace??tree? graph瑜??ㅼ떆 ?쎌뒿?덈떎.', 'resetWorkspaceView...; loadWorkspaceTree(); reloadGraphFromFilesystem()', 'src/lib/page/workspace-settings-actions.ts', '??workspace ?붾㈃ 援ъ꽦'),
+          S('feature', 'Theme reload', 'reloadAppTheme()', 'workspace蹂?app.css? theme info瑜??ㅼ떆 ?곸슜?⑸땲??', 'appTheme.reload()', 'src/lib/page/controllers/app-theme-controller.svelte.ts', 'Workspace ?꾩슜 theme ?곸슜'),
+          S('page', 'Controller ?꾨즺', 'complete*/finish*', '紐⑸줉, active summary, status瑜?媛깆떊?섍퀬 pending ?곹깭瑜??댁젣?⑸땲??', 'workspacePanel.complete*()', 'src/lib/page/workspace-management-runtime.ts', 'Workspace ?묒뾽 ?꾨즺'),
+        ]
+      },
+      {
+        id: 'workspace-tree-load', group: 'Workspace', title: 'Workspace Tree Load & Graph Sync',
+        summary: '?꾩옱 workspace??directory tree瑜?backend?먯꽌 ?쎌뼱 controller???곸슜?섍퀬 GraphRuntime??workspace-tree projection怨??붾㈃ ?좏깮 ?곹깭瑜?留욎땅?덈떎.',
+        trigger: '珥덇린 mount, workspace ?꾪솚, ?뚯씪 ?묒뾽 ??reload', result: '?ъ씠?쒕컮 tree? graph tree projection ?숆린??,
+        tags: ['tree', 'projection', 'sync'],
+        steps: [
+          S('entry', 'Tree load ?붿껌', 'loadWorkspaceTree()', '珥덇린???먮뒗 ?뚯씪 ?묒뾽 ??tree reload瑜??붿껌?⑸땲??', 'durableLoaders.workspaceTree()', 'src/lib/page/page-route-lifecycle.svelte.ts', 'Tree workflow ?쒖옉'),
+          S('page', 'Workspace panel loading', 'begin tree load', '湲곗〈 ?곹깭瑜??좎??섎㈃??loading/status瑜?媛깆떊?⑸땲??', 'workspacePanel.*', 'src/lib/page/controllers/workspace-panel-controller.svelte.ts', 'UI loading ?곹깭'),
+          S('feature', 'WorkspaceTree.load', 'app.workspace.tree.load', 'WorkspaceFeature??tree facade瑜??몄텧?⑸땲??', 'getWorkspaceTree', 'src/lib/features/workspace/WorkspaceFeature.ts', 'Application tree 議고쉶'),
+          S('ipc', 'get_workspace_tree', 'WorkspaceClient.loadTree', 'workspaceId/path ?듭뀡??DTO???ｌ뼱 IPC濡??꾨떖?⑸땲??', 'transport.invoke(commandNames.getWorkspaceTree, { params })', 'src/lib/services/workspace-client.ts', 'Tree IPC ?붿껌'),
+          S('rust', 'Tree command 泥섎━', 'get_workspace_tree', 'AppState index service媛 workspace filesystem tree瑜?議고쉶?⑸땲??', 'state.index.get_workspace_tree(...)', 'src-tauri/src/commands/index_commands.rs', 'Tree entry ?앹꽦'),
+          S('infra', 'Filesystem/DB 議고쉶', 'workspace tree snapshot', '?뚯씪 ?쒖뒪?쒓낵 workspace context瑜?湲곗??쇰줈 怨꾩링 援ъ“瑜??앹꽦?⑸땲??', 'index_service.get_workspace_tree', 'src-tauri/src/application/index_service.rs', 'Tree snapshot 諛섑솚'),
+          S('page', 'Controller??tree ?곸슜', 'workspacePanel.tree', '?뺣젹/?뺤옣/?좏깮 ?ㅼ젙???곸슜??visible rows瑜?留뚮벊?덈떎.', 'workspacePanel.apply*Tree', 'src/lib/page/controllers/workspace-panel-controller.svelte.ts', '?ъ씠?쒕컮 tree 媛깆떊'),
+          S('feature', 'GraphRuntime tree 諛섏쁺', 'graphRuntime.setWorkspaceTree', 'workspace tree瑜?graph folder/document projection??諛섏쁺?⑸땲??', 'graphRuntime?.setWorkspaceTree(tree)', 'src/lib/graph/core/GraphRuntime.ts', 'Graph projection ?ш뎄??),
+          S('page', 'HUD/overlay render ?붿껌', 'sync + requestRender', '?좏깮 ?곹깭? HUD snapshot??留욎텛怨???frame???붿껌?⑸땲??', 'syncWorkspaceTreeGraphState(); requestRender()', 'src/lib/page/page-workspace-surface-runtime.ts', 'Tree/graph ?붾㈃ ?숆린??),
+        ]
+      },
+      {
+        id: 'document-open', group: 'Document & Editor', title: '臾몄꽌 ?닿린',
+        summary: 'workspace row ?먮뒗 graph node?먯꽌 ?뚯씪???좏깮?섎㈃ ??낆쓣 寃利앺븯怨?graph node瑜?resolve????document瑜??쎌뼱 editor window瑜??쎈땲??',
+        trigger: 'Workspace row ?대┃ / Graph node ?닿린', result: '臾몄꽌 ?댁슜怨?editor window, graph focus媛 ?숆린?붾맖',
+        tags: ['read_document', 'open editor', 'graph focus'],
+        steps: [
+          S('entry', '?뚯씪 ?좏깮', 'row click / graph node click', '?ъ슜?먭? workspace tree ?먮뒗 graph?먯꽌 臾몄꽌瑜??쎈땲??', 'handleWorkspaceRowClick / openGraphNode', 'src/lib/page/workspace-interaction-runtime.ts', 'Open workflow ?쒖옉'),
+          S('page', '吏?????寃利?, 'isSupportedDocumentPath', '吏?먰븯吏 ?딅뒗 ?뚯씪? 利됱떆 李⑤떒?섍퀬 status瑜?媛깆떊?⑸땲??', 'isSupportedWorkspaceFileOpenPath(path)', 'src/lib/page/workspace-file-open-actions.ts', '?닿린 媛???щ? 寃곗젙'),
+          S('page', 'Directory / graph focus 諛섏쁺', 'applyOpenFileDirectory + revealDocumentPath', 'working directory? graph reveal ?곹깭瑜?癒쇱? 媛깆떊?⑸땲??', 'workspacePanel.applyOpenFileDirectory(); graphRuntime.revealDocumentPath()', 'src/lib/page/workspace-file-open-actions.ts', 'UI context 以鍮?),
+          S('feature', 'Graph node resolve', 'getNodeOverlayByPath', '?꾩옱 graph???몃뱶媛 ?덉쑝硫?湲곗〈 overlay瑜??ъ슜?⑸땲??', 'graphRuntime.getNodeOverlayByPath(...)', 'src/lib/page/workspace-file-open-actions.ts', 'Graph node ?먯깋'),
+          S('page', '吏곸젒 臾몄꽌 read fallback', 'readDocument({ path })', 'graph???몃뱶媛 ?놁쑝硫?indexed document瑜?吏곸젒 ?쎌뼱 overlay瑜??앹꽦?⑸땲??', 'resolveWorkspaceFileGraphNode()', 'src/lib/page/workspace-file-open-actions.ts', '臾몄꽌 read ?꾩슂'),
+          S('feature', 'DocumentFeature.read', 'MarkdownDocumentService.readDocument', 'PageRouteServices媛 document瑜??쎄퀬 EditorFeature.open源뚯? ?몄텧?⑸땲??', 'app.documents.read(request); app.editor.open(document)', 'src/lib/page/page-route-runtime-wiring.ts', 'Document application 泥섎━'),
+          S('ipc', 'read_document invoke', 'DocumentServiceAdapter', '臾몄꽌 寃쎈줈 ?먮뒗 ID瑜?Tauri command濡??꾨떖?⑸땲??', 'invokeCommand(commandNames.readDocument, { params })', 'src/lib/editor/MarkdownDocumentService.ts', 'Document IPC ?붿껌'),
+          S('rust', 'read_document command', 'state.index.read_document', '?꾩옱 workspace context?먯꽌 臾몄꽌瑜??쎄퀬 metadata/hash瑜?援ъ꽦?⑸땲??', 'state.index.read_document(...)', 'src-tauri/src/commands/index_commands.rs', 'DocumentContent ?앹꽦'),
+          S('infra', '?뚯씪/DB ?쎄린', 'content + hash + mtime', '?뚯씪 ?댁슜怨??됱씤 metadata瑜?寃고빀??DocumentContent瑜?諛섑솚?⑸땲??', 'ReadDocumentParams ??DocumentContent', 'src-tauri/src/application/index_service.rs', '臾몄꽌 ?곗씠??諛섑솚'),
+          S('page', 'Editor window ?앹꽦', 'openEditor(node)', '鍮?full-editor tab ?泥??щ?? editor mode瑜??곸슜??window瑜??쎈땲??', 'input.openEditor(node, options)', 'src/lib/page/workspace-file-open-actions.ts', 'Editor session 媛깆떊'),
+          S('page', 'Focus/occupancy/render sync', 'selection + occupancy + overlay', 'active editor, graph selection, editor occupancy, overlay snapshot??媛깆떊?⑸땲??', 'syncEditorPresentation(); requestRender()', 'src/lib/page/full-editor-runtime.ts', '臾몄꽌 ?닿린 ?꾨즺'),
+        ]
+      },
+      {
+        id: 'document-save', group: 'Document & Editor', title: '?먮뵒??Draft ???,
+        summary: 'editor draft snapshot??content? expectedHash瑜?backend???꾨떖??optimistic concurrency瑜??뺤씤?섍퀬, ?깃났 ??editor??????곹깭瑜?媛깆떊?⑸땲??',
+        trigger: '???紐낅졊 / dirty close?먯꽌 ????좏깮', result: '?뚯씪 ???諛?editor hash/dirty ?곹깭 媛깆떊',
+        tags: ['save_document', 'expectedHash', 'dirty'],
+        steps: [
+          S('entry', '????붿껌', 'Ctrl/Cmd+S ?먮뒗 dialog', '?꾩옱 editor draft ??μ쓣 ?붿껌?⑸땲??', 'saveEditorDraft(editor)', 'src/lib/page/editor-draft-save-actions.ts', 'Save workflow ?쒖옉'),
+          S('page', 'Draft snapshot ?뺤씤', 'editor.draftSnapshot', 'snapshot???놁쑝硫?????놁씠 false瑜?諛섑솚?⑸땲??', 'if (!snapshot) return false', 'src/lib/page/editor-draft-save-actions.ts', '???????뺤젙'),
+          S('page', 'Save params ?앹꽦', 'documentId + content + expectedHash', '?숈떆 蹂寃?異⑸룎 寃利앹쓣 ?꾪븳 湲곗〈 hash瑜??ы븿?⑸땲??', '{ documentId, content, expectedHash }', 'src/lib/page/editor-draft-save-actions.ts', 'Save DTO 以鍮?),
+          S('feature', 'DocumentFeature.save', 'MarkdownDocumentService.saveDocument', '臾몄꽌 facade瑜??듯빐 save adapter瑜??몄텧?⑸땲??', 'app.documents.save(request)', 'src/lib/features/documents/DocumentFeature.ts', 'Application save ?몄텧'),
+          S('ipc', 'save_document invoke', 'DocumentServiceAdapter', 'DTO瑜?Tauri backend濡??꾨떖?⑸땲??', 'invokeCommand(commandNames.saveDocument, { params })', 'src/lib/editor/MarkdownDocumentService.ts', 'Save IPC ?붿껌'),
+          S('rust', 'save_document command', 'state.index.save_document', 'expectedHash瑜?寃利앺븯怨?臾몄꽌 ???application service瑜??ㅽ뻾?⑸땲??', 'state.index.save_document(...)', 'src-tauri/src/commands/index_commands.rs', 'Backend save 泥섎━'),
+          S('infra', '?뚯씪 ?곌린 / ?됱씤 媛깆떊', 'filesystem + DB index', '??content瑜?湲곕줉?섍퀬 hash/mtime/index ?뺣낫瑜?媛깆떊?⑸땲??', 'SaveDocumentParams ??DocumentContent', 'src-tauri/src/application/index_service.rs', '??DocumentContent ?앹꽦'),
+          S('page', 'Editor saved ?곹깭 諛섏쁺', 'markSaved(nodeId, saved)', '??hash/content瑜?editor session??諛섏쁺?섍퀬 dirty flag瑜??댁젣?⑸땲??', 'actions.markSaved(editor.node.id, saved)', 'src/lib/page/editor-draft-save-actions.ts', 'Editor ????꾨즺'),
+          S('page', '?ㅽ뙣 泥섎━', 'failEditorSave + log', '異⑸룎?대굹 IO ?ㅻ쪟瑜?status? log濡??몄텧?⑸땲??', 'failEditorSave(label, errorMessage(error))', 'src/lib/page/editor-draft-save-actions.ts', '?깃났 ?먮뒗 ?ㅻ쪟 ?곹깭 ?뺤젙'),
+        ]
+      },
+      {
+        id: 'document-media-bytes', group: 'Document & Editor', title: '臾몄꽌 Bytes / Media Resolve',
+        summary: 'PDF쨌?대?吏쨌泥⑤? 由ъ냼?ㅻ? ?꾪빐 ?먮Ц bytes瑜??쎄굅??臾몄꽌 湲곗? ?곷? media 寃쎈줈瑜??ㅼ젣 ?뚯씪 寃쎈줈濡?resolve?섎뒗 蹂댁“ lifecycle?낅땲??',
+        trigger: 'Viewer ?먮뒗 editor media 濡쒕뱶', result: 'binary bytes ?먮뒗 resolve??media 寃쎈줈 諛섑솚',
+        tags: ['read bytes', 'resolve media', 'viewer'],
+        steps: [
+          S('entry', 'Viewer 由ъ냼???붿껌', 'PDF/image/media load', '臾몄꽌 viewer媛 ?먮Ц bytes ?먮뒗 media target ?댁꽍???붿껌?⑸땲??', 'readBytes / resolveMedia', 'src/lib/features/documents/DocumentFeature.ts', '由ъ냼??workflow ?쒖옉'),
+          S('feature', 'DocumentFeature ?꾩엫', 'readBytes / resolveMedia', '?붿껌??MarkdownDocumentService濡??꾨떖?⑸땲??', 'service.readDocumentBytes / resolveDocumentMedia', 'src/lib/features/documents/DocumentFeature.ts', 'Document service ?몄텧'),
+          S('ipc', 'Tauri command ?몄텧', 'read_document_bytes / resolve_document_media', '臾몄꽌 ID/寃쎈줈? target??command DTO濡??꾨떖?⑸땲??', 'invokeCommand(commandNames.*)', 'src/lib/editor/MarkdownDocumentService.ts', '由ъ냼??IPC ?붿껌'),
+          S('rust', 'Index command 泥섎━', 'read_document_bytes / resolve_document_media', 'workspace 寃쎄퀎? 寃쎈줈 ?덉쟾?깆쓣 ?뺤씤?⑸땲??', 'state.index.read_document_bytes / resolve_document_media', 'src-tauri/src/commands/index_commands.rs', 'Backend 寃쎈줈 ?댁꽍'),
+          S('infra', 'Filesystem ?묎렐', 'binary read / path resolve', '?먮Ц bytes瑜??쎄굅??source document 湲곗? media ?뚯씪??李얠뒿?덈떎.', 'Vec<u8> / Option<String>', 'src-tauri/src/application/index_service.rs', '由ъ냼??諛섑솚'),
+          S('page', 'Viewer???곸슜', 'render media', 'PDF renderer, image element, markdown preview媛 諛섑솚 媛믪쓣 ?ъ슜?⑸땲??', 'viewer component state', 'src/lib/editor', '誘몃뵒???쒖떆 ?꾨즺'),
+        ]
+      },
+      {
+        id: 'editor-close', group: 'Document & Editor', title: 'Dirty Editor ?リ린',
+        summary: '?リ린 ??곸씠 dirty?몄? ?뺤씤?섍퀬 ??Β룸쾭由셋룹랬??遺꾧린瑜?泥섎━????editor session, full-editor group, graph selection怨?occupancy瑜??뺣━?⑸땲??',
+        trigger: '???リ린 / shortcut / workspace 蹂寃?, result: '?ъ슜??寃곗젙???곕씪 ?덉쟾?섍쾶 ????먮뒗 ?リ린 痍⑥냼/?꾨즺',
+        tags: ['confirm', 'save', 'close animation'],
+        steps: [
+          S('entry', '?リ린 ?붿껌', 'closeEditor(nodeId)', '??踰꾪듉, command palette, shortcut ?먮뒗 workspace ?묒뾽???リ린瑜??붿껌?⑸땲??', 'editorCloseRequestActions.closeEditor()', 'src/lib/page/editor-close-actions.ts', 'Close workflow ?쒖옉'),
+          S('page', '???editor 議고쉶', 'editorSession.openEditors.find', '鍮??? ?꾨씫??editor, ?쇰컲 editor 遺꾧린瑜??뺤씤?⑸땲??', 'find(candidate.node.id === nodeId)', 'src/lib/page/editor-close-actions.ts', '?リ린 ????뺤젙'),
+          S('page', 'Dirty ?뺤씤 dialog', 'confirmDirtyEditorClose', 'dirty editor硫???? 踰꾨┝, 痍⑥냼 ?좏깮??諛쏆뒿?덈떎.', 'confirmDirtyEditorClose({...})', 'src/lib/page/editor-window-confirmation.ts', '?ъ슜??寃곗젙 ?湲?),
+          S('page', '?좏깮?????, 'saveEditorDraft', '????좏깮 ??document save lifecycle???섑뻾?섍퀬 ?ㅽ뙣?섎㈃ ?リ린瑜?以묐떒?⑸땲??', 'await saveEditorDraft(editor)', 'src/lib/page/editor-close-actions.ts', 'Dirty 泥섎━ ?꾨즺'),
+          S('feature', 'Tree offset 珥덇린??, 'resetTreeNodeOffset', '?대떦 editor媛 蹂寃쏀븳 graph tree node offset???먯긽蹂듦뎄?⑸땲??', 'graphRuntime.resetTreeNodeOffset(nodeId)', 'src/lib/page/page-route-runtime-wiring.ts', 'Graph layout cleanup'),
+          S('page', '???먮뒗 overlay ?リ린', 'closeFullEditorTab / startEditorCloseAnimation', 'document editor mode?먯꽌??利됱떆 tab???쒓굅?섍퀬, overlay mode?먯꽌??close motion???쒖옉?⑸땲??', 'closeEditorNow(editor)', 'src/lib/page/editor-close-actions.ts', 'Editor ?쒓굅 吏꾪뻾'),
+          S('page', 'Session / group 媛깆떊', 'removeEditorWindow + groups', 'openEditors, activeEditorId, full editor groups瑜??ш뎄?깊빀?덈떎.', 'editorSession.removeEditorWindow(nodeId)', 'src/lib/page/editor-close-actions.ts', 'Editor state ?뺣━'),
+          S('feature', 'Graph/editor sync', 'selection + occupancy + overlay', '?쒖꽦 editor 湲곗? graph selection怨?occupancy, overlay snapshot??媛깆떊?⑸땲??', 'syncSelectionFromActiveEditor(); syncEditorOccupanciesWithRuntime()', 'src/lib/page/editor-close-actions.ts', '?붾㈃ ?곹깭 ?쇱튂'),
+          S('page', 'Focus / mode ?뺤젙', 'setEditorFocusActive', '?⑥? editor ?좊Т???곕씪 focus? full editor mode瑜??뺤젙?⑸땲??', 'setEditorFocusActive(Boolean(activeEditorId))', 'src/lib/page/editor-close-actions.ts', '?リ린 ?꾨즺'),
+        ]
+      },
+      {
+        id: 'editor-session', group: 'Document & Editor', title: 'Editor Session 蹂듭썝쨌???,
+        summary: 'engine 以鍮??댄썑 ?댁쟾???대젮 ?덈뜕 editor window? full-editor group??蹂듭썝?섍퀬, ?댄썑 ?곹깭 蹂寃쎌쓣 durable storage??吏????ν빀?덈떎.',
+        trigger: 'engine init / editor session 蹂寃?effect', result: '?ъ떎???꾩뿉??editor layout怨?active tab ?좎?',
+        tags: ['restore', 'persist', 'session'],
+        steps: [
+          S('entry', 'Engine 以鍮??꾨즺', 'restoreEditorSessionState()', 'GraphRuntime怨?viewport媛 以鍮꾨맂 ??session 蹂듭썝???쒖옉?⑸땲??', 'await input.restoreEditorSessionState()', 'src/lib/page/page-engine-init.ts', 'Session restore ?쒖옉'),
+          S('page', '???snapshot ?쎄린', 'editor session storage', '釉뚮씪?곗? ?먮뒗 detached window payload?먯꽌 session snapshot???쎌뒿?덈떎.', 'editorSessionPersistenceActions.restoreEditorSessionState', 'src/lib/page/full-editor-runtime.ts', '????곹깭 濡쒕뱶'),
+          S('page', '臾몄꽌 ?ъ뿴湲?, 'openWorkspaceFile / readDocument', 'snapshot???덈뒗 媛?臾몄꽌瑜??꾩옱 workspace?먯꽌 ?ㅼ떆 resolve?⑸땲??', 'openWorkspaceFile(path)', 'src/lib/page/full-editor-runtime.ts', 'Editor ?곗씠??蹂듭썝'),
+          S('page', 'Window/group ?ш뎄??, 'openEditors + fullEditorGroups', 'position, size mode, active tab, split group??蹂듭썝?⑸땲??', 'syncFullEditorGroupsForEditors()', 'src/lib/page/full-editor-runtime-view-session-actions.ts', 'Editor layout 蹂듭썝'),
+          S('feature', 'Graph occupancy sync', 'syncEditorOccupanciesWithRuntime', '蹂듭썝??editor媛 graph physics??諛섏쁺?섎룄濡?occupancy瑜?sync?⑸땲??', 'graphRuntime.setEditorOccupancies(...)', 'src/lib/page/full-editor-runtime.ts', 'Graph/editor ?곹깭 ?쇱튂'),
+          S('page', 'Restore ?꾨즺 flag', 'editorSession.restoreCompleted', '蹂듭썝 以?save effect媛 ?숈옉?섏? ?딅룄濡??섎뜕 guard瑜??댁젣?⑸땲??', 'restoreCompleted = true', 'src/lib/page/controllers/editor-session-controller.svelte.ts', '蹂듭썝 ?꾨즺'),
+          S('entry', '?곹깭 蹂寃?effect', '$effect()', 'editor ?곹깭媛 諛붾뚮㈃ detached window媛 ?꾨땶 寃쎌슦 persist瑜??붿껌?⑸땲??', 'persistEditorSessionState()', 'src/lib/page/page-route-lifecycle.svelte.ts', 'Session ????쒖옉'),
+          S('page', 'Snapshot 吏곷젹?????, 'editor session storage', '?꾩옱 open editors, groups, active ID瑜??뺢퇋?뷀빐 ??ν빀?덈떎.', 'editorSessionPersistenceActions.persistEditorSessionState', 'src/lib/page/full-editor-runtime-view-session-actions.ts', 'Session durable ????꾨즺'),
+        ]
+      },
+      {
+        id: 'workspace-create-file', group: 'Workspace', title: '臾몄꽌 ?앹꽦',
+        summary: '?좏깮??directory? ?앹꽦 mode瑜?湲곗??쇰줈 怨꾪쉷??留뚮뱾怨?backend?먯꽌 ?뚯씪???앹꽦????tree/graph瑜?reload?섍퀬 ??editor瑜??쎈땲??',
+        trigger: '??臾몄꽌 踰꾪듉 / graph context menu', result: '???뚯씪 ?앹꽦, focus, editor open',
+        tags: ['create file', 'reload', 'open'],
+        steps: [
+          S('entry', '??臾몄꽌 ?붿껌', 'createWorkspaceDocument', '?ъ슜?먭? ?꾩옱 folder ?먮뒗 graph context menu?먯꽌 臾몄꽌 ?앹꽦???붿껌?⑸땲??', 'workspaceCreateActions.createDocument', 'src/lib/page/workspace-create-actions.ts', 'Create workflow ?쒖옉'),
+          S('page', '?앹꽦 怨꾪쉷 怨꾩궛', 'createDocumentPlan', 'parent path, ?앹꽦 mode, 湲곕낯 ?대쫫, active document瑜?湲곗??쇰줈 怨꾪쉷??寃利앺빀?덈떎.', 'workspacePanel.createDocumentPlan(...)', 'src/lib/page/workspace-management-runtime.ts', '?좏슚???앹꽦 怨꾪쉷 ?뺣낫'),
+          S('feature', 'WorkspaceEntries.createFile', 'createWorkspaceFile', 'Workspace feature瑜??듯빐 ?뚯씪 ?앹꽦 ?붿껌???꾨떖?⑸땲??', 'app.workspace.entries.createFile(params)', 'src/lib/features/workspace/WorkspaceFeature.ts', 'Application create ?몄텧'),
+          S('ipc', 'create_workspace_file', 'WorkspaceClient.createFile', '?앹꽦 DTO瑜?Tauri command濡?蹂대깄?덈떎.', 'transport.invoke(commandNames.createWorkspaceFile, { params })', 'src/lib/services/workspace-client.ts', 'Create IPC ?붿껌'),
+          S('rust', 'Create command 泥섎━', 'state.index.create_workspace_file', 'workspace 寃쎄퀎瑜??뺤씤?섍퀬 ?뚯씪 ?앹꽦 application service瑜??ㅽ뻾?⑸땲??', 'create_workspace_file(...)', 'src-tauri/src/commands/index_commands.rs', 'Backend ?뚯씪 ?앹꽦'),
+          S('infra', 'Filesystem write / index update', 'new markdown file', '?뚯씪??湲곕줉?섍퀬 workspace index????entry瑜?諛섏쁺?⑸땲??', 'CreateWorkspaceFileParams ??WorkspaceTreeEntry', 'src-tauri/src/application/index_service.rs', '??tree entry 諛섑솚'),
+          S('page', 'Controller???앹꽦 寃곌낵 ?곸슜', 'applyCreatedDocumentPlan', '?좏깮/?뺤옣/status ?곹깭瑜???寃쎈줈 湲곗??쇰줈 媛깆떊?⑸땲??', 'workspacePanel.applyCreatedDocumentPlan()', 'src/lib/page/workspace-management-runtime.ts', 'Tree UI ?좊컲??),
+          S('page', 'Tree/graph reload', 'reloadWorkspaceTreeAndFocusPath', '??寃쎈줈媛 graph? tree ?묒そ???섑??섎룄濡?reload?⑸땲??', 'reloadWorkspaceTreeAndFocusPath()', 'src/lib/page/workspace-create-actions.ts', 'Projection ?숆린??),
+          S('page', '??editor ?닿린', 'openWorkspaceFile', '?앹꽦??臾몄꽌瑜?editor濡??닿퀬 ?꾨즺 status瑜??쒖떆?⑸땲??', 'openWorkspaceFile(created.path)', 'src/lib/page/workspace-create-actions.ts', '臾몄꽌 ?앹꽦 ?꾨즺'),
+        ]
+      },
+      {
+        id: 'workspace-create-folder', group: 'Workspace', title: '?대뜑 ?앹꽦 諛?利됱떆 ?대쫫 蹂寃?,
+        summary: '?대뜑 ?앹꽦 怨꾪쉷???ㅽ뻾?섍퀬 tree/graph reload ????folder瑜??좏깮???곹깭?먯꽌 rename input??利됱떆 ?쒖꽦?뷀빀?덈떎.',
+        trigger: '???대뜑 踰꾪듉 / graph context menu', result: '???대뜑 ?앹꽦 諛?inline rename ?쒖옉',
+        tags: ['create directory', 'rename', 'focus'],
+        steps: [
+          S('entry', '???대뜑 ?붿껌', 'createWorkspaceFolder', '?꾩옱 workspace ?꾩튂???대뜑 ?앹꽦???붿껌?⑸땲??', 'workspaceCreateActions.createFolder', 'src/lib/page/workspace-create-actions.ts', 'Folder create ?쒖옉'),
+          S('page', '?대뜑 怨꾪쉷 ?앹꽦', 'createFolderPlan', '?꾩옱 active document? target parent瑜?湲곗??쇰줈 寃쎈줈/?대쫫??寃利앺빀?덈떎.', 'workspacePanel.createFolderPlan(...)', 'src/lib/page/workspace-management-runtime.ts', '?앹꽦 怨꾪쉷 ?뺣낫'),
+          S('feature', 'WorkspaceEntries.createDirectory', 'createWorkspaceDirectory', 'Workspace facade瑜??듯빐 directory ?앹꽦 ?붿껌???꾨떖?⑸땲??', 'app.workspace.entries.createDirectory(params)', 'src/lib/features/workspace/WorkspaceFeature.ts', 'Application ?몄텧'),
+          S('ipc', 'create_workspace_directory', 'WorkspaceClient.createDirectory', 'DTO瑜?Tauri backend濡??꾨떖?⑸땲??', 'transport.invoke(commandNames.createWorkspaceDirectory, { params })', 'src/lib/services/workspace-client.ts', 'Directory IPC ?붿껌'),
+          S('rust', 'Directory command 泥섎━', 'state.index.create_workspace_directory', 'workspace ?대?????directory瑜??앹꽦?⑸땲??', 'create_workspace_directory(...)', 'src-tauri/src/commands/index_commands.rs', 'Backend directory ?앹꽦'),
+          S('infra', 'Filesystem / index 諛섏쁺', 'mkdir + tree entry', '?ㅼ젣 directory瑜?留뚮뱾怨?tree metadata瑜?媛깆떊?⑸땲??', 'CreateWorkspaceDirectoryParams', 'src-tauri/src/application/index_service.rs', '??folder entry 諛섑솚'),
+          S('page', 'Tree reload 諛?focus', 'reloadWorkspaceTreeAndFocusPath', 'parent expansion怨???folder focus瑜?蹂댁옣?⑸땲??', 'reloadWorkspaceTreeAndFocusPath()', 'src/lib/page/workspace-create-actions.ts', '??folder ?쒖떆'),
+          S('page', 'Rename ?곹깭 ?쒖옉', 'beginWorkspaceRename', '??folder ?대쫫??利됱떆 ?섏젙?????덈룄濡?inline input???쒖꽦?뷀빀?덈떎.', 'beginWorkspaceRename(path, name)', 'src/lib/page/workspace-management-runtime.ts', 'Inline rename ?쒖꽦??),
+          S('page', 'Graph presentation ?뺤갑', 'settleGraphPresentation + tick', 'graph node ?꾩튂? rename input alignment瑜??덉젙?뷀빀?덈떎.', 'await settleGraphPresentation(); await tick()', 'src/lib/page/workspace-create-actions.ts', '?대뜑 ?앹꽦 ?꾨즺'),
+        ]
+      },
+      {
+        id: 'workspace-move-rename', group: 'Workspace', title: '?뚯씪 ?대룞쨌?대쫫 蹂寃?,
+        summary: 'drag/drop ?먮뒗 inline rename???숈씪??move plan???ъ슜?섎ŉ, dirty editor 異⑸룎??留됯퀬 backend ?대룞 ???대┛ editor 寃쎈줈? tree/graph瑜?媛깆떊?⑸땲??',
+        trigger: 'Drag & drop / inline rename commit', result: '?뚯씪 寃쎈줈, editor, tree, graph媛 ???꾩튂濡??쇱튂',
+        tags: ['move', 'rename', 'dirty guard'],
+        steps: [
+          S('entry', 'Move/Rename ?낅젰', 'drop / commitRename', '?ъ슜?먭? tree/graph drag ?먮뒗 inline rename???꾨즺?⑸땲??', 'applyWorkspaceMovePlan', 'src/lib/page/workspace-move-actions.ts', 'Move workflow ?쒖옉'),
+          S('page', 'Move plan 寃利?, 'source + target + nextName', '媛숈? ?꾩튂, invalid parent, ?대쫫 異⑸룎 ?щ?瑜?寃?ы빀?덈떎.', 'workspacePanel.renamePlan / finishInternalMoveDrop', 'src/lib/page/workspace-interaction-runtime.ts', '?좏슚???대룞 怨꾪쉷 ?뺣낫'),
+          S('page', 'Dirty editor guard', 'blockDirtyMove', '???寃쎈줈? 愿?⑤맂 ??λ릺吏 ?딆? editor媛 ?덉쑝硫??대룞??李⑤떒?⑸땲??', 'workspacePanel.blockDirtyMove(...)', 'src/lib/page/workspace-move-actions.ts', '?곗씠???먯떎 諛⑹?'),
+          S('feature', 'WorkspaceEntries.move', 'moveWorkspaceEntry', 'source/target DTO瑜?workspace feature???꾨떖?⑸땲??', 'app.workspace.entries.move(params)', 'src/lib/features/workspace/WorkspaceFeature.ts', 'Application move ?몄텧'),
+          S('ipc', 'move_workspace_entry', 'WorkspaceClient.moveEntry', 'Tauri backend??move command瑜??꾩넚?⑸땲??', 'transport.invoke(commandNames.moveWorkspaceEntry, { params })', 'src/lib/services/workspace-client.ts', 'Move IPC ?붿껌'),
+          S('rust', 'Move command 泥섎━', 'state.index.move_workspace_entry', 'workspace 寃쎄퀎? 異⑸룎???뺤씤????filesystem move瑜??ㅽ뻾?⑸땲??', 'move_workspace_entry(...)', 'src-tauri/src/commands/index_commands.rs', 'Backend ?대룞 泥섎━'),
+          S('infra', 'FS rename/move + index', 'path mutation', '?뚯씪 ?먮뒗 folder瑜??대룞?섍퀬 愿??indexed path瑜?媛깆떊?⑸땲??', 'MoveWorkspaceEntryParams ??WorkspaceTreeEntry', 'src-tauri/src/application/index_service.rs', '??path 諛섑솚'),
+          S('page', '?대┛ editor 寃쎈줈 媛깆떊', 'close/reopen or applyMovedEntry', 'move??臾몄꽌? ?섏쐞 editor瑜???寃쎈줈濡??뺣젹?⑸땲??', 'workspacePanel.applyMovedEntry(moved)', 'src/lib/page/workspace-move-actions.ts', 'Editor/tree state 諛섏쁺'),
+          S('page', 'Tree/graph reload 諛?reopen', 'reload + openWorkspaceFile', 'projection???ㅼ떆 ?쎄퀬 ?꾩슂??寃쎌슦 ?대룞??臾몄꽌瑜??ы솢?깊솕?⑸땲??', 'reloadWorkspaceTreeAndGraph(); openWorkspaceFile()', 'src/lib/page/workspace-move-actions.ts', 'Move/Rename ?꾨즺'),
+        ]
+      },
+      {
+        id: 'workspace-external-copy', group: 'Workspace', title: '?몃? ?뚯씪 Drag & Drop 蹂듭궗',
+        summary: '?댁쁺泥댁젣?먯꽌 ?뚯뼱???뚯씪??target folder??蹂듭궗?섍퀬 ??寃쎈줈媛 蹂댁씠?꾨줉 tree expansion怨?graph reload瑜??섑뻾?⑸땲??',
+        trigger: 'Tauri webview drag/drop event', result: '?몃? ?뚯씪??workspace??蹂듭궗?섍퀬 tree/graph???쒖떆??,
+        tags: ['drag-drop', 'external copy', 'Tauri event'],
+        steps: [
+          S('entry', 'OS drag/drop event', 'onDragDropEvent', '?몃? ?뚯씪??webview ?꾩뿉 drop?⑸땲??', 'getCurrentWebview().onDragDropEvent', 'src/lib/page/page-engine-init.ts', '?몃? drop ?섏떊'),
+          S('page', 'Drop target 怨꾩궛', 'rows + pointer + DPR', 'DOM row ?꾩튂? pointer 醫뚰몴瑜??ъ슜??target directory瑜?寃곗젙?⑸땲??', 'handleWorkspaceExternalDragDrop', 'src/lib/page/workspace-external-copy-actions.ts', '蹂듭궗 ???寃곗젙'),
+          S('page', 'Controller pending ?곹깭', 'beginExternalCopy', 'target怨?source paths瑜??곹깭??湲곕줉?⑸땲??', 'workspacePanel.beginExternalCopy(...)', 'src/lib/page/workspace-interaction-runtime.ts', 'UI pending ?쒖떆'),
+          S('feature', 'WorkspaceEntries.copyExternal', 'copyExternalWorkspaceEntries', '?몃? path 紐⑸줉怨?target directory瑜?application facade???꾨떖?⑸땲??', 'app.workspace.entries.copyExternal(params)', 'src/lib/features/workspace/WorkspaceFeature.ts', 'Application copy ?몄텧'),
+          S('ipc', 'copy_external_workspace_entries', 'WorkspaceClient.copyExternalEntries', '蹂듭궗 ?붿껌??Tauri command濡??꾩넚?⑸땲??', 'transport.invoke(commandNames.copyExternalWorkspaceEntries, { params })', 'src/lib/services/workspace-client.ts', 'Copy IPC ?붿껌'),
+          S('rust', 'External copy command', 'state.index.copy_external_workspace_entries', 'source file???덉쟾?섍쾶 workspace ?대?濡?蹂듭궗?⑸땲??', 'copy_external_workspace_entries(...)', 'src-tauri/src/commands/index_commands.rs', 'Backend copy 泥섎━'),
+          S('infra', 'Filesystem copy / index', 'copy files and folders', '以묐났 ?대쫫 ?뺤콉???곸슜?섍퀬 ?앹꽦??entries瑜??됱씤?⑸땲??', 'Vec<WorkspaceTreeEntry>', 'src-tauri/src/application/index_service.rs', '蹂듭궗 entry 紐⑸줉 諛섑솚'),
+          S('page', '?뺤옣 寃쎈줈 怨꾩궛', 'externalCopyExpandedPaths', '蹂듭궗??寃쎈줈媛 蹂댁씠?꾨줉 ?꾩슂??parent folder expansion??怨꾩궛?⑸땲??', 'workspacePanel.externalCopyExpandedPaths(...)', 'src/lib/page/workspace-external-copy-actions.ts', 'Tree ?쒖떆 怨꾪쉷'),
+          S('page', 'Tree/graph reload', 'reloadWorkspaceTreeAndGraph', '???뚯씪??tree? graph snapshot??諛섏쁺?⑸땲??', 'reloadTreeAndGraph(ensureExpandedPaths)', 'src/lib/page/workspace-file-open-actions.ts', '?몃? 蹂듭궗 ?꾨즺'),
+        ]
+      },
+      {
+        id: 'workspace-trash', group: 'Workspace', title: 'Workspace Entry ?댁????대룞',
+        summary: '??젣 媛???щ?? dirty editor瑜??뺤씤????graph reload ?대깽?몃? ?쇱떆 ?듭젣?섍퀬 backend trash ?묒뾽, editor close, tree/graph ?쒓굅瑜??쒖꽌?濡??섑뻾?⑸땲??',
+        trigger: 'Delete 踰꾪듉 / context menu', result: '???entry? 愿??editor/graph ?곹깭 ?쒓굅',
+        tags: ['trash', 'dirty guard', 'graph suppression'],
+        steps: [
+          S('entry', '??젣 ?붿껌', 'trashWorkspaceTreeEntry', 'tree row ?먮뒗 graph node????젣瑜??붿껌?⑸땲??', 'workspaceTrashActions.trashEntry', 'src/lib/page/workspace-trash-actions.ts', 'Trash workflow ?쒖옉'),
+          S('page', '??젣 媛???щ? 寃??, 'canTrash + blockDirtyMove', 'root, protected path, dirty editor 議곌굔??寃?ы빀?덈떎.', 'workspacePanel.canTrash(); blockDirtyMove()', 'src/lib/page/workspace-management-runtime.ts', '?덉쟾???뺤씤'),
+          S('page', 'Indexed reload ?듭젣', 'markWorkspaceIndexedGraphReloadSuppressed', '?덉긽??filesystem event媛 以묐났 graph reload瑜??쇱쑝?ㅼ? ?딄쾶 ?쒖떆?⑸땲??', 'markWorkspaceIndexedGraphReloadSuppressed()', 'src/lib/page/workspace-management-runtime.ts', '以묐났 reload 諛⑹?'),
+          S('feature', 'WorkspaceEntries.trash', 'trashWorkspaceEntry', 'workspace facade瑜??듯빐 trash ?붿껌??蹂대깄?덈떎.', 'app.workspace.entries.trash(params)', 'src/lib/features/workspace/WorkspaceFeature.ts', 'Application trash ?몄텧'),
+          S('ipc', 'trash_workspace_entry', 'WorkspaceClient.trashEntry', 'Tauri command濡?target path瑜??꾨떖?⑸땲??', 'transport.invoke(commandNames.trashWorkspaceEntry, { params })', 'src/lib/services/workspace-client.ts', 'Trash IPC ?붿껌'),
+          S('rust', 'Trash command 泥섎━', 'state.index.trash_workspace_entry', '?뚮옯???댁????먮뒗 workspace ?뺤콉???곕씪 entry瑜??대룞?⑸땲??', 'trash_workspace_entry(...)', 'src-tauri/src/commands/index_commands.rs', 'Backend trash 泥섎━'),
+          S('infra', 'Filesystem / index ?쒓굅', 'path removed', '???path? ?섏쐞 臾몄꽌瑜?index?먯꽌 ?쒓굅?⑸땲??', 'TrashWorkspaceEntryParams', 'src-tauri/src/application/index_service.rs', '??젣??entry 諛섑솚'),
+          S('page', '愿??editor ?リ린', 'closeEditor', '??젣??path ?먮뒗 ?섏쐞 path瑜?李몄“?섎뒗 editor瑜??뺣━?⑸땲??', 'closeEditor(nodeId, false)', 'src/lib/page/workspace-trash-actions.ts', 'Editor state ?뺣━'),
+          S('feature', 'Graph path ?쒓굅', 'removeWorkspaceGraphPath', '利됱떆 graph projection?먯꽌 ?대떦 path瑜??쒓굅?⑸땲??', 'graphRuntime.removeNodesByPath(path)', 'src/lib/page/workspace-management-runtime.ts', 'Graph state ?뺣━'),
+          S('page', 'Tree reload / status ?꾨즺', 'loadWorkspaceTree + completeTrash', '理쒖떊 tree瑜??쎄퀬 UI ?곹깭瑜?留덈Т由ы빀?덈떎.', 'loadWorkspaceTree(); workspacePanel.completeTrash()', 'src/lib/page/workspace-trash-actions.ts', 'Trash ?꾨즺'),
+        ]
+      },
+      {
+        id: 'search', group: 'Search & Index', title: '臾몄꽌쨌蹂몃Ц쨌?쒓렇쨌諛깅쭅??寃??,
+        summary: '寃???좏삎???곕씪 SearchClient command瑜??좏깮?섍퀬 backend index ?먮뒗 ripgrep 寃?됱쓣 ?ㅽ뻾??寃곌낵瑜?UI??諛섑솚?⑸땲??',
+        trigger: '寃???낅젰 / command input / backlink panel', result: '?꾩옱 workspace 踰붿쐞??寃??寃곌낵 諛섑솚',
+        tags: ['search_documents', 'ripgrep', 'backlinks'],
+        steps: [
+          S('entry', '寃???붿껌', 'query + filters', '?ъ슜?먭? 臾몄꽌, 蹂몃Ц, ?쒓렇 ?먮뒗 backlink 寃?됱쓣 ?ㅽ뻾?⑸땲??', 'search UI / command input', 'src/lib/page', 'Search workflow ?쒖옉'),
+          S('page', '寃??mode/params 援ъ꽦', 'documents/body/tags/backlinks', '?꾩옱 workspace? query, limit, document ID瑜??뺢퇋?뷀빀?덈떎.', 'SearchParams / BodySearchParams', 'src/lib/types/search.ts', '寃??DTO 以鍮?),
+          S('feature', 'WorkspaceSearch ?몄텧', 'documents/body/tags/backlinks', 'WorkspaceFeature??search facade媛 ?곸젅??client 硫붿꽌?쒕? ?좏깮?⑸땲??', 'app.workspace.search.*', 'src/lib/features/workspace/WorkspaceFeature.ts', 'Application search ?몄텧'),
+          S('ipc', 'SearchClient invoke', 'search_documents / search_document_body / search_tags / get_backlinks', '媛?寃?됱쓣 typed Tauri command濡??꾨떖?⑸땲??', 'transport.invoke(commandNames.*)', 'src/lib/services/search-client.ts', 'Search IPC ?붿껌'),
+          S('rust', 'Search command 遺꾧린', 'index_commands.rs', 'metadata 寃?됱? index service, 蹂몃Ц 寃?됱? ripgrep_search濡??꾩엫?⑸땲??', 'state.index.search_* / ripgrep_search', 'src-tauri/src/commands/index_commands.rs', 'Backend 寃???ㅽ뻾'),
+          S('infra', 'DB index / ripgrep 議고쉶', 'SQLite + filesystem scan', '?꾩슂??storage?먯꽌 寃곌낵 row瑜??앹꽦?⑸땲??', 'SearchRow / BodySearchRow / BacklinkRow', 'src-tauri/src/indexer', '寃??寃곌낵 ?앹꽦'),
+          S('page', '寃곌낵 ?뺣젹/?쒖떆', 'controller state', '寃곌낵瑜?list, command palette, backlink panel??諛섏쁺?⑸땲??', 'search results state', 'src/lib/page', '寃???꾨즺'),
+        ]
+      },
+      {
+        id: 'reindex', group: 'Search & Index', title: 'Workspace ?꾩껜쨌蹂寃?寃쎈줈 ?ъ깋??,
+        summary: '珥덇린 ?ㅽ뻾, ?섎룞 ?붿껌, ?뚯씪 媛먯떆 ?대깽?몄뿉 ?곕씪 ?꾩껜 workspace ?먮뒗 蹂寃쎈맂 path留??ъ깋?명븯怨?workspace-indexed ?대깽?몃줈 graph/tree reload瑜??좊룄?⑸땲??',
+        trigger: 'startup / manual reindex / file watcher', result: 'DB index? graph snapshot??filesystem怨??쇱튂',
+        tags: ['reindex', 'file watcher', 'event'],
+        steps: [
+          S('entry', '?됱씤 ?몃━嫄?, 'startup/manual/fs event', '?꾩껜 ?먮뒗 蹂寃?path ?ъ깋?몄씠 ?붿껌?⑸땲??', 'reindexWorkspace / reindexChangedPaths', 'src/lib/page/page-route-runtime-wiring.ts', 'Reindex workflow ?쒖옉'),
+          S('feature', 'WorkspaceSearch reindex', 'IndexingClient', 'workspaceId/path ?먮뒗 changed paths瑜?indexing client???꾨떖?⑸땲??', 'app.workspace.search.reindex*', 'src/lib/features/workspace/WorkspaceFeature.ts', 'Application reindex ?몄텧'),
+          S('ipc', 'Indexing command invoke', 'reindex_workspace / reindex_changed_paths', '?뺢퇋?붾맂 DTO瑜?backend濡??꾩넚?⑸땲??', 'transport.invoke(commandNames.reindex*)', 'src/lib/services/indexing-client.ts', 'Reindex IPC ?붿껌'),
+          S('rust', 'Reindex command 泥섎━', 'state.index.reindex_*', '?꾩옱 window workspace context瑜?湲곗??쇰줈 indexer瑜??몄텧?⑸땲??', 'state.index.reindex_workspace(...)', 'src-tauri/src/commands/index_commands.rs', 'Backend reindex ?ㅽ뻾'),
+          S('infra', 'Filesystem scan / parse', 'indexer::reindex', '臾몄꽌 metadata, links, tags, hashes瑜?怨꾩궛?섍퀬 DB瑜?媛깆떊?⑸땲??', 'ReindexSummary', 'src-tauri/src/indexer/reindex.rs', 'Index snapshot 媛깆떊'),
+          S('infra', 'Workspace indexed event', 'workspace-indexed', '?꾨즺 ?대깽?멸? frontend webview濡??꾨떖?⑸땲??', 'listenWorkspaceIndexed()', 'src/lib/services/workspace-index-events.ts', 'Frontend ?대깽??諛쒖깮'),
+          S('page', 'Reload ?뺤콉 ?뺤씤', 'handleWorkspaceIndexed', '?덉긽 ?묒뾽??suppression ?щ?? 蹂寃?path瑜?寃?좏빀?덈떎.', 'handleWorkspaceIndexed(event)', 'src/lib/page/page-engine-init.ts', 'Reload ?꾩슂??寃곗젙'),
+          S('page', 'Tree/graph reload', 'loadWorkspaceTree + reloadGraph', '??index瑜?湲곗??쇰줈 tree? GraphRuntime snapshot??媛깆떊?⑸땲??', 'reloadGraphFromFilesystem()', 'src/lib/page/page-workspace-surface-runtime.ts', '?ъ깋???꾨즺'),
+        ]
+      },
+      {
+        id: 'graph-snapshot', group: 'Graph', title: 'Graph Snapshot Load & Reload',
+        summary: 'DocumentGraphRepository媛 backend snapshot???쎄퀬 GraphRuntime???좉퇋 snapshot???곸슜 ?먮뒗 merge????simulation worker? renderer瑜??щ룞湲고솕?⑸땲??',
+        trigger: 'engine init / filesystem reload / workspace switch', result: 'GraphRuntime??nodes, links, projection, worker state 理쒖떊??,
+        tags: ['snapshot', 'merge', 'worker sync'],
+        steps: [
+          S('entry', 'Graph reload ?붿껌', 'init / reloadSnapshot', '珥덇린???먮뒗 filesystem 蹂寃???graph snapshot???붿껌?⑸땲??', 'GraphRuntime.reloadSnapshot(options)', 'src/lib/graph/core/GraphRuntime.ts', 'Snapshot workflow ?쒖옉'),
+          S('feature', 'Repository load', 'DocumentGraphRepository.loadSnapshot', '?꾩옱 workspace/limit 議곌굔?쇰줈 graph repository瑜??몄텧?⑸땲??', 'this.repository.loadSnapshot()', 'src/lib/graph/core/GraphRuntime.ts', 'Repository 議고쉶'),
+          S('ipc', 'get_document_graph', 'invokeCommand', 'Tauri backend??snapshot DTO瑜??붿껌?⑸땲??', 'invokeCommand(commandNames.getDocumentGraph, { params })', 'src/lib/graph/data/DocumentGraphRepository.ts', 'Graph IPC ?붿껌'),
+          S('rust', 'Graph snapshot command', 'state.index.get_document_graph', 'DB index?먯꽌 document nodes? link 愿怨꾨? 援ъ꽦?⑸땲??', 'get_document_graph(...)', 'src-tauri/src/commands/index_commands.rs', 'Backend snapshot 援ъ꽦'),
+          S('infra', 'DB graph 議고쉶', 'documents + links + tags', 'workspace 踰붿쐞??graph snapshot???쎌뒿?덈떎.', 'DocumentGraphSnapshot', 'src-tauri/src/application/index_service.rs', 'GraphSnapshot 諛섑솚'),
+          S('feature', 'Snapshot ?곸슜/merge', 'applySnapshot / mergeSnapshot', 'preserveSimulation ?듭뀡???곕씪 湲곗〈 ?꾩튂瑜??좎??섍굅???꾩쟾 援먯껜?⑸땲??', 'applySnapshot(snapshot) / mergeSnapshot(snapshot)', 'src/lib/graph/core/GraphRuntime.ts', 'Runtime graph state 媛깆떊'),
+          S('feature', 'Projected graph ?ш뎄??, 'workspace tree + local graph + visibility', 'folder projection, local graph, selection overlay瑜??ы븿???쒖떆 graph瑜?怨꾩궛?⑸땲??', 'rebuildProjectedGraph()', 'src/lib/graph/core/GraphRuntime.ts', '?쒖떆 graph ?앹꽦'),
+          S('infra', 'Worker graph sync', 'syncWorkerGraph', 'simulation worker??node/link 蹂?붿? ?좎????꾩튂瑜??꾨떖?⑸땲??', 'syncWorkerGraph("init"/reload)', 'src/lib/graph/core/GraphRuntime.ts', '臾쇰━ worker 理쒖떊??),
+          S('page', 'HUD/overlay/render 媛깆떊', 'sync + refresh + requestRender', '??snapshot??UI? canvas??諛섏쁺?⑸땲??', 'syncGraphHudFromRuntime(); requestRender()', 'src/lib/page/page-engine-init.ts', 'Graph reload ?꾨즺'),
+        ]
+      },
+      {
+        id: 'graph-interaction', group: 'Graph', title: 'Graph ?좏깮쨌?쒕옒洹맞텹ocal Graph',
+        summary: 'canvas pointer ?대깽?몃? hit-test?섍퀬 node ?좏깮, drag, local graph ?곹깭, workspace focus, editor activation??議고빀??GraphRuntime怨?controller ?곹깭瑜?媛깆떊?⑸땲??',
+        trigger: 'Canvas pointer / keyboard interaction', result: '?좏깮쨌臾쇰━쨌workspace/editor focus? ?붾㈃ overlay 媛깆떊',
+        tags: ['hit test', 'selection', 'drag', 'local graph'],
+        steps: [
+          S('entry', 'Canvas ?낅젰', 'pointerdown/move/up', '?깅줉??canvas event handler媛 pointer ?대깽?몃? 諛쏆뒿?덈떎.', 'registerCanvasEngineEvents', 'src/lib/page/page-engine-init.ts', 'Graph interaction ?쒖옉'),
+          S('page', '醫뚰몴 蹂??/ hit test', 'canvasPoint ??worldPoint', 'client 醫뚰몴瑜?canvas/world 醫뚰몴濡?諛붽씀怨?graph node瑜?李얠뒿?덈떎.', 'worldPointFromScreen / graphRuntime.hitTest', 'src/lib/page/page-graph-interaction-runtime.ts', '???node 寃곗젙'),
+          S('page', 'Controller ?좏깮 ?곹깭', 'setGraphSelectedNodeId', 'GraphSceneController? workspace selection ?곹깭瑜?媛깆떊?⑸땲??', 'graphScene.setSelectedNodeId(...)', 'src/lib/page/controllers/graph-scene-controller.svelte.ts', 'UI selection 媛깆떊'),
+          S('feature', 'GraphRuntime selection', 'selectNode / setLocalGraphState', '?좏깮 overlay? local graph seed/hop depth瑜??곸슜?⑸땲??', 'graphRuntime.selectNode(...)', 'src/lib/graph/core/GraphRuntime.ts', 'Runtime selection ?곸슜'),
+          S('feature', 'Drag state 泥섎━', 'begin/drag/end node', 'node ?먮뒗 tree node瑜?physics world?먯꽌 ?대룞?쒗궎怨?worker??sync?⑸땲??', 'beginGraphRuntimeNodeDrag / dragGraphRuntimeNodeToWorld', 'src/lib/graph/core/GraphRuntime.ts', 'Graph position 媛깆떊'),
+          S('page', 'Workspace/editor ?곕룞', 'focus path / open editor', 'folder??workspace tree focus, document??editor open/activate濡??곌껐?⑸땲??', 'focusWorkspacePathFromGraphNode / openGraphNode', 'src/lib/page/page-workspace-surface-runtime.ts', '?꾨찓??focus ?곌퀎'),
+          S('infra', 'Worker physics sync', 'projected graph/drag sync', 'dragged position, local graph topology, selection state瑜?worker???꾨떖?⑸땲??', 'syncProjectedGraphChangeToWorker', 'src/lib/graph/core/GraphRuntime.ts', 'Simulation state 諛섏쁺'),
+          S('page', 'HUD/overlay refresh', 'syncGraphHudFromRuntime', '?좏깮, drag, node label, editor occupancy snapshot??媛깆떊?⑸땲??', 'refreshOverlaySnapshots()', 'src/lib/page/page-graph-interaction-runtime.ts', 'Interaction ?붾㈃ 媛깆떊'),
+          S('page', 'Render invalidation', 'requestRender(reason)', '??graph state瑜?洹몃━湲??꾪빐 frame???덉빟?⑸땲??', 'requestRender("graph-runtime")', 'src/lib/page/page-render-scheduler.ts', 'Interaction ?꾨즺'),
+        ]
+      },
+      {
+        id: 'zoom', group: 'Settings', title: 'App Zoom 濡쒕뱶쨌蹂寃?,
+        summary: '??λ맂 zoom ?ㅼ젙??濡쒕뱶??webview???곸슜?섍퀬, ?ъ슜??蹂寃쎌? 吏곷젹 save queue? run ID濡?理쒖떊 ?붿껌留?諛섏쁺?⑸땲??',
+        trigger: 'Page mount / zoom shortcut / settings control', result: '????ㅼ젙怨??ㅼ젣 webview scale ?쇱튂',
+        tags: ['zoom', 'save queue', 'webview'],
+        steps: [
+          S('entry', 'Zoom ?≪뀡', 'load/increase/decrease/reset', 'mount ?먮뒗 keyboard command媛 zoom controller瑜??몄텧?⑸땲??', 'AppZoomController.*', 'src/lib/page/controllers/app-zoom-controller.svelte.ts', 'Zoom workflow ?쒖옉'),
+          S('page', 'Scale ?뺢퇋??, 'stepAppZoomScale / normalize', '?덉슜 踰붿쐞? step??留욌뒗 ?ㅼ쓬 ?ㅼ젙??怨꾩궛?⑸땲??', 'normalizeAppZoomSettings(...)', 'src/lib/page/app-zoom.ts', 'Zoom settings ?앹꽦'),
+          S('page', 'Optimistic UI 諛섏쁺', '$state settings/status', '????꾩뿉 ?쒖떆 scale怨?status瑜?利됱떆 媛깆떊?⑸땲??', 'this.settings = next', 'src/lib/page/controllers/app-zoom-controller.svelte.ts', 'UI 利됱떆 ?묐떟'),
+          S('feature', 'AppZoomFeature set/load', 'AppZoomClient', 'zoom feature媛 durable settings client瑜??몄텧?⑸땲??', 'zoom.load() / zoom.set(next)', 'src/lib/features/settings/AppZoomFeature.ts', 'Application zoom ?몄텧'),
+          S('ipc', 'get/set_app_zoom_settings', 'AppZoomClient', 'Tauri command濡?zoom ?ㅼ젙???쎄굅????ν빀?덈떎.', 'transport.invoke(commandNames.get/setAppZoomSettings)', 'src/lib/services/app-zoom-service.ts', 'Zoom IPC 泥섎━'),
+          S('rust', 'Zoom settings command', 'app_zoom_commands', '?ㅼ젙 ?뚯씪/DB?먯꽌 zoom 媛믪쓣 ?쎄굅???뺢퇋?뷀빐 ??ν빀?덈떎.', 'get_app_zoom_settings / set_app_zoom_settings', 'src-tauri/src/commands/app_zoom_commands.rs', 'Zoom durable ???),
+          S('page', 'Save queue 理쒖떊???뺤씤', 'saveQueue + updateRunId', '?곗냽 ?낅젰 以??ㅻ옒???묐떟??理쒖떊 scale????? ?딅룄濡?諛⑹??⑸땲??', 'if (runId !== updateRunId) return', 'src/lib/page/controllers/app-zoom-controller.svelte.ts', '理쒖떊 寃곌낵留?梨꾪깮'),
+          S('feature', 'Webview scale ?곸슜', 'CurrentWebviewZoom.setScale', '??λ맂 scale???ㅼ젣 webview???곸슜?⑸땲??', 'zoom.apply(saved.scale)', 'src/lib/features/settings/AppZoomFeature.ts', '?ㅼ젣 UI 諛곗쑉 蹂寃?),
+          S('page', 'Layout render 媛깆떊', 'onApplied()', 'zoom 蹂????viewport/layout???ㅼ떆 怨꾩궛?섎룄濡??뚮┰?덈떎.', 'this.onApplied()', 'src/lib/page/controllers/app-zoom-controller.svelte.ts', 'Zoom ?꾨즺'),
+        ]
+      },
+      {
+        id: 'theme', group: 'Settings', title: 'Built-in쨌Community쨌Workspace Theme',
+        summary: 'theme mode? workspace蹂?app.css ?ㅼ젙??durable state? browser cache?먯꽌 蹂듭썝?섍퀬, built-in ?먮뒗 community CSS? workspace CSS瑜?DOM???곸슜?⑸땲??',
+        trigger: 'Page mount / theme ?좏깮 / workspace ?꾪솚', result: '?좏깮 theme? workspace CSS媛 DOM 諛?????ㅼ젙??諛섏쁺',
+        tags: ['theme', 'community CSS', 'workspace app.css'],
+        steps: [
+          S('entry', 'Theme load/select/reload', 'AppThemeController', 'mount, ?ъ슜???좏깮, workspace ?꾪솚??theme workflow瑜??쒖옉?⑸땲??', 'load() / selectThemeMode() / reload()', 'src/lib/page/controllers/app-theme-controller.svelte.ts', 'Theme workflow ?쒖옉'),
+          S('page', 'System theme listener', 'matchMedia', 'system mode????묓븯?꾨줉 prefers-color-scheme listener瑜??깅줉?⑸땲??', 'bindSystemThemeListener()', 'src/lib/page/controllers/app-theme-controller.svelte.ts', 'OS theme 蹂??媛먯?'),
+          S('feature', 'Community theme 紐⑸줉', 'loadCommunityThemeOptions', '?ㅼ튂??community item 以?theme瑜??쎌뼱 ?좏깮 ?듭뀡???⑹묩?덈떎.', 'communityCatalog.listThemes()', 'src/lib/features/settings/AppThemeFeature.ts', 'Theme catalog 援ъ꽦'),
+          S('ipc', 'Theme info/settings 議고쉶', 'get_app_theme_*', 'workspace ID, CSS path, durable theme settings瑜?backend?먯꽌 ?쎌뒿?덈떎.', 'theme.loadInfo(); theme.loadSettings()', 'src/lib/features/settings/AppThemeFeature.ts', 'Theme backend 議고쉶'),
+          S('rust', 'Theme command 泥섎━', 'theme_commands', 'workspace context? ?ㅼ젙??湲곗??쇰줈 theme info/settings/CSS瑜?諛섑솚?⑸땲??', 'get_app_theme_info/settings; read_app_theme_css', 'src-tauri/src/commands/theme_commands.rs', 'Theme ?곗씠??諛섑솚'),
+          S('feature', 'Base theme 寃곗젙', 'community or built-in', 'community mode硫??ㅼ튂 CSS瑜??쎄퀬, ?꾨땲硫?light/dark/system built-in CSS瑜??좏깮?⑸땲??', 'applyBaseTheme(mode, systemPrefersDark)', 'src/lib/features/settings/AppThemeFeature.ts', 'Base CSS 寃곗젙'),
+          S('feature', 'DOM base CSS ?곸슜', 'AppThemeDomApplier', 'resolved mode? CSS瑜?document style???곸슜?⑸땲??', 'applyAppThemeCss(...)', 'src/lib/features/settings/AppThemeFeature.ts', 'Base theme 諛섏쁺'),
+          S('feature', 'Workspace CSS ?곸슜', 'applyWorkspaceCss', 'workspace蹂?enable ?ㅼ젙??李몄씠硫?app.css瑜??쎌뼱 異붽? ?곸슜?⑸땲??', 'readAppThemeCss(); applyWorkspaceAppThemeCss(css)', 'src/lib/features/settings/AppThemeFeature.ts', 'Workspace CSS 諛섏쁺'),
+          S('page', 'Durable save queue', 'DurablePreferenceSync', 'theme mode? workspace蹂?CSS enable map????ν빀?덈떎.', 'themeSettingsSync.queueSave(...)', 'src/lib/page/controllers/app-theme-controller.svelte.ts', 'Theme ?ㅼ젙 ???),
+          S('page', 'Status / fallback ?뺤젙', 'applySelectedTheme', '?ㅻ쪟 ??built-in theme濡?fallback?섍퀬 status瑜?媛깆떊?⑸땲??', 'Using built-in theme', 'src/lib/page/controllers/app-theme-controller.svelte.ts', 'Theme ?꾨즺'),
+        ]
+      },
+      {
+        id: 'durable-preferences', group: 'Settings', title: '怨듯넻 Durable Preferences ?숆린??,
+        summary: 'appearance, callout, graph, graph chat, shortcut, workspace tree ?ㅼ젙? browser cache濡?利됱떆 諛섏쓳?섍퀬 DurablePreferenceSync瑜??듯빐 backend snapshot怨??쒖감 ??μ쓣 留욎땅?덈떎.',
+        trigger: 'Page mount / ?ㅼ젙 蹂寃?, result: '濡쒖뺄 利됱떆 諛섏쓳怨?backend ?곸냽 ?ㅼ젙??理쒖쥌 ?쇨????뺣낫',
+        tags: ['DurablePreferenceSync', 'cache', 'settings'],
+        steps: [
+          S('entry', '?ㅼ젙 controller ?앹꽦', '$state + cached defaults', 'browser storage????λ맂 媛믪쓣 珥덇린 UI state濡??ъ슜?⑸땲??', 'loadStored*()', 'src/lib/page/controllers', '利됱떆 ?ъ슜 媛?ν븳 ?ㅼ젙'),
+          S('page', 'Durable sync 援ъ꽦', 'new DurablePreferenceSync', 'loadSnapshot, persistValue, currentValue, applyValue ?ы듃瑜??곌껐?⑸땲??', 'new DurablePreferenceSync({...})', 'src/lib/page/durable-preference-sync.ts', '?숆린???뺤콉 ?앹꽦'),
+          S('entry', 'Mount ??snapshot load', 'loadDurablePreferences/Settings', 'backend??authoritative snapshot???붿껌?⑸땲??', 'preferencesSync.load()', 'src/lib/page/controllers', 'Durable load ?쒖옉'),
+          S('ipc', 'get_*_settings', 'service invokeCommand', '媛?setting service媛 ???command瑜??몄텧?⑸땲??', 'getGraphPreferencesSnapshot ??, 'src/lib/services', 'Settings IPC ?붿껌'),
+          S('rust', 'Settings command 泥섎━', 'settings commands', '?ㅼ젙 version??寃利앺븯怨???λ맂 媛믪쓣 諛섑솚?⑸땲??', 'get_* / set_*', 'src-tauri/src/commands', 'Durable snapshot 諛섑솚'),
+          S('page', 'Snapshot merge/apply', 'snapshotValue + applyValue', 'backend 媛믨낵 ?꾩옱 cache瑜??뺤콉???곕씪 ?뺢퇋?뷀빐 state??諛섏쁺?⑸땲??', 'applyValue(preferences)', 'src/lib/page/durable-preference-sync.ts', 'UI state 理쒖떊??),
+          S('entry', '?ъ슜???ㅼ젙 蹂寃?, 'update*()', 'state? browser cache瑜?利됱떆 媛깆떊?⑸땲??', 'storeGraph* / writeBrowserStorageItem', 'src/lib/page/controllers', 'Optimistic ?ㅼ젙 諛섏쁺'),
+          S('page', 'Save queue', 'queueSave(currentValue)', '?곗냽 蹂寃쎌쓣 吏곷젹?뷀븯怨?理쒖떊 normalized value瑜???ν빀?덈떎.', 'preferencesSync.queueSave(...)', 'src/lib/page/durable-preference-sync.ts', 'Durable save ?덉빟'),
+          S('ipc', 'set_*_settings', 'service persistValue', '理쒖쥌 ?ㅼ젙??backend??湲곕줉?⑸땲??', 'setGraphPreferences ??, 'src/lib/services', 'Settings ????꾨즺'),
+        ]
+      },
+      {
+        id: 'community', group: 'Extensions', title: 'Community Catalog쨌?ㅼ튂쨌??젣',
+        summary: 'catalog URL怨??ㅼ튂 ??ぉ??濡쒕뱶?섍퀬 ?좊ː ?뺤씤 ??URL 蹂寃? item ?ㅼ튂/??젣瑜??섑뻾?섎ŉ theme ??ぉ?대㈃ AppTheme瑜?利됱떆 reload?⑸땲??',
+        trigger: 'Community panel mount / ?ъ슜???ㅼ튂쨌??젣', result: 'catalog 諛??ㅼ튂 ?곹깭 媛깆떊, theme ?듭뀡 ?ъ쟻??,
+        tags: ['catalog', 'install', 'remove', 'theme reload'],
+        steps: [
+          S('entry', 'Community ?≪뀡', 'load/save URL/install/remove', 'Community panel ?먮뒗 page mount媛 controller瑜??몄텧?⑸땲??', 'CommunityController.*', 'src/lib/page/controllers/community-controller.svelte.ts', 'Community workflow ?쒖옉'),
+          S('page', 'Loading/pending ?곹깭', 'status + item IDs', '?꾩옱 ?묒뾽??UI ?곹깭???쒖떆?⑸땲??', 'loading/installingItemId/removingItemId', 'src/lib/page/controllers/community-controller.svelte.ts', 'UI pending ?곹깭'),
+          S('feature', 'Community service ?몄텧', 'catalog URL / list / install / remove', 'CommunityFeature ?먮뒗 legacy service function???붿껌???섑뻾?⑸땲??', 'getCommunityCatalog / installCommunityItem ??, 'src/lib/features/community/CommunityFeature.ts', 'Application community ?몄텧'),
+          S('ipc', 'Community commands', 'get/set/install/remove/list/readThemeCss', 'Tauri command濡?catalog? package ?묒뾽???꾨떖?⑸땲??', 'invokeCommand(commandNames.*Community*)', 'src/lib/services/community-service.ts', 'Community IPC ?붿껌'),
+          S('rust', 'Community command 泥섎━', 'community_commands', 'catalog URL 寃利? download/install, manifest 諛??ㅼ튂 ?붾젆?곕━瑜?愿由ы빀?덈떎.', 'install_community_item / remove_community_item', 'src-tauri/src/commands/community_commands.rs', 'Backend extension 泥섎━'),
+          S('infra', 'Network / filesystem', 'catalog fetch + package storage', 'catalog JSON???쎄퀬 community item ?뚯씪??濡쒖뺄 ??μ냼???ㅼ튂쨌??젣?⑸땲??', 'community storage', 'src-tauri/src/application', '?ㅼ튂 ?곹깭 蹂寃?),
+          S('page', 'Installed 紐⑸줉 reload', 'listInstalledCommunityItems', '理쒖떊 ?ㅼ튂 紐⑸줉怨?catalog row瑜??ㅼ떆 怨꾩궛?⑸땲??', 'this.installedItems = await listInstalled...', 'src/lib/page/controllers/community-controller.svelte.ts', 'Community UI 媛깆떊'),
+          S('feature', 'Theme 議곌굔遺 reload', 'if installed.type === "theme"', 'theme item?대㈃ AppTheme catalog? CSS瑜??ㅼ떆 濡쒕뱶?⑸땲??', 'await reloadThemes()', 'src/lib/page/controllers/community-controller.svelte.ts', 'Theme ?듭뀡 理쒖떊??),
+          S('page', 'Status ?꾨즺/?ㅻ쪟', 'status + finally', '?깃났 硫붿떆吏瑜??쒖떆?섍퀬 pending ID瑜??댁젣?⑸땲??', 'installingItemId = ""', 'src/lib/page/controllers/community-controller.svelte.ts', 'Community ?묒뾽 ?꾨즺'),
+        ]
+      },
+      {
+        id: 'collaboration', group: 'Extensions', title: 'Collaboration 臾몄꽌쨌?몄뀡쨌?ㅼ떆媛??숆린??,
+        summary: '臾몄꽌 registry, persistence, session client, realtime connector瑜?CollaborationService??議곕┰?섍퀬 snapshot/update/session command? realtime transport瑜??④퍡 ?ъ슜?⑸땲??',
+        trigger: '?묒뾽 臾몄꽌 open / session ?쒖옉 / local update', result: '濡쒖뺄 臾몄꽌 ?곹깭, ?곸냽 update log, ?먭꺽 peer媛 ?숆린?붾맖',
+        tags: ['snapshot', 'updates', 'session', 'realtime'],
+        steps: [
+          S('entry', '?묒뾽 臾몄꽌 ?붿껌', 'open/start/update/stop', '?묒뾽 UI ?먮뒗 editor binding??CollaborationService瑜??몄텧?⑸땲??', 'collaboration.service.*', 'src/lib/collaboration/CollaborationService.ts', 'Collaboration workflow ?쒖옉'),
+          S('feature', 'Document registry 議고쉶', 'CollaborationDocumentRegistry', '?숈씪 臾몄꽌??in-memory collaborative model???ъ궗?⑺븯嫄곕굹 ?앹꽦?⑸땲??', 'registry.ensure/get', 'src/lib/collaboration/collaboration-document-registry.ts', '濡쒖뺄 ?묒뾽 臾몄꽌 ?뺣낫'),
+          S('feature', 'Persistence snapshot 濡쒕뱶', 'CollaborationPersistenceClient', '??λ맂 snapshot怨??댄썑 update log瑜?backend?먯꽌 ?쎌뒿?덈떎.', 'loadSnapshot / loadUpdates', 'src/lib/collaboration/collaboration-persistence-client.ts', '?곸냽 ?곹깭 蹂듭썝'),
+          S('ipc', 'Collaboration commands', 'ensure/load/save/append', '臾몄꽌 蹂댁옣, snapshot, updates command瑜?Tauri濡?蹂대깄?덈떎.', 'commandNames.*Collaboration*', 'src/lib/shared/ipc/command-names.ts', 'Collaboration IPC ?붿껌'),
+          S('rust', 'Persistence command 泥섎━', 'collaboration_commands', '臾몄꽌 ID, snapshot, update log瑜?DB???쎄퀬 ?곷땲??', 'ensure_collaboration_document / append_*', 'src-tauri/src/commands/collaboration_commands.rs', '?묒뾽 ?곗씠???곸냽??),
+          S('feature', 'Session ?쒖옉/寃利?, 'CollaborationSessionClient', 'session token???앹꽦쨌寃利앺븯怨?session lifecycle??愿由ы빀?덈떎.', 'startSession / validateToken / stopSession', 'src/lib/collaboration/collaboration-session-client.ts', '?묒뾽 ?몄뀡 ?뺣낫'),
+          S('feature', 'Realtime ?곌껐', 'CollaborationRealtimeConnector', 'session ?뺣낫濡?peer transport瑜??곌껐?섍퀬 update ?≪닔?좎쓣 ?쒖옉?⑸땲??', 'realtime.connect(...)', 'src/lib/collaboration/collaboration-realtime-connector.ts', '?ㅼ떆媛?梨꾨꼸 ?곌껐'),
+          S('entry', 'Local/remote update', 'append + broadcast + apply', '濡쒖뺄 蹂寃쎌? ?곸냽?붋톌roadcast?섍퀬 ?먭꺽 蹂寃쎌? registry model???곸슜?⑸땲??', 'service update pipeline', 'src/lib/collaboration/CollaborationService.ts', '臾몄꽌 ?곹깭 ?숆린??),
+          S('feature', 'Snapshot compaction / 醫낅즺', 'saveSnapshot + stopSession', '?꾩슂 ??snapshot????ν븯怨?realtime/session ?먯썝???뺣━?⑸땲??', 'saveCollaborationSnapshot / stopSession', 'src/lib/collaboration/CollaborationService.ts', '?묒뾽 lifecycle ?꾨즺'),
+        ]
+      },
+      {
+        id: 'chat', group: 'Extensions', title: 'LLM Query & Markdown ???,
+        summary: 'GraphChatBar ?먮뒗 command input?먯꽌 prompt? context瑜??꾨떖?섎㈃ Rust chat command媛 LLM ?묐떟???앹꽦?섍퀬 workspace markdown?쇰줈 ??ν븳 ??tree/index 媛깆떊 ?먮쫫?쇰줈 ?곌껐?⑸땲??',
+        trigger: 'Chat prompt ?쒖텧', result: 'LLM ?묐떟 markdown 諛?attachment ???,
+        tags: ['LLM', 'markdown', 'attachment'],
+        steps: [
+          S('entry', 'Prompt ?쒖텧', 'GraphChatBar', '?ъ슜?먭? prompt, ???directory, 臾몃㎘???쒖텧?⑸땲??', 'queryLlmAndSaveMarkdown', 'src/lib/page/components/GraphChatBar.svelte', 'Chat workflow ?쒖옉'),
+          S('page', '?붿껌 ?곹깭/params 援ъ꽦', 'prompt + workspace context', 'loading, error, attachment ?곹깭瑜?愿由ы븯怨?DTO瑜?留뚮벊?덈떎.', 'graph chat runtime', 'src/lib/page', 'Chat ?붿껌 以鍮?),
+          S('feature', 'Chat service ?몄텧', 'queryLlmAndSaveMarkdown / saveChatAttachment', 'PageRouteServices媛 service function???몄텧?⑸땲??', 'services.queryLlmAndSaveMarkdown', 'src/lib/page/page-route-runtime-wiring.ts', 'Application chat ?몄텧'),
+          S('ipc', 'Chat command invoke', 'query_llm_and_save_markdown', 'Tauri backend濡?prompt? ????듭뀡???꾨떖?⑸땲??', 'invokeCommand(commandNames.queryLlmAndSaveMarkdown)', 'src/lib/services/chat-service.ts', 'Chat IPC ?붿껌'),
+          S('rust', 'Chat command 泥섎━', 'chat_commands', 'LLM provider ?몄텧怨?markdown/attachment ???workflow瑜??ㅽ뻾?⑸땲??', 'query_llm_and_save_markdown', 'src-tauri/src/commands/chat_commands.rs', 'Backend LLM ?묒뾽'),
+          S('infra', 'Network / filesystem write', 'LLM API + markdown file', '?묐떟??諛쏆븘 workspace ?대? ?뚯씪濡?湲곕줉?⑸땲??', 'response markdown / attachment', 'src-tauri/src/application', '???뚯씪 ?앹꽦'),
+          S('infra', '?됱씤 蹂寃??대깽??, 'file watcher / reindex', '??markdown??watcher??媛먯??섏뼱 index? graph snapshot??媛깆떊?⑸땲??', 'workspace-indexed event', 'src-tauri/src/indexer/file_watcher.rs', '??臾몄꽌 ?몃뜳??),
+          S('page', 'Tree/graph reload', 'loadWorkspaceTree + reloadGraph', '?앹꽦??臾몄꽌瑜??붾㈃???쒖떆?섍퀬 ?꾩슂 ??open/focus?⑸땲??', 'handleWorkspaceIndexed', 'src/lib/page/page-engine-init.ts', 'Chat workflow ?꾨즺'),
+        ]
+      },
+      {
+        id: 'system-actions', group: 'Extensions', title: 'Clipboard & File Explorer ?쒖뒪???≪뀡',
+        summary: '?띿뒪??寃쎈줈 蹂듭궗? ?뚯씪 ?먯깋湲??닿린瑜?PageRouteServices?먯꽌 吏곸젒 system service濡??곌껐??Tauri backend ?먮뒗 opener plugin???몄텧?⑸땲??',
+        trigger: 'Context menu / toolbar system action', result: '?댁쁺泥댁젣 clipboard ?먮뒗 ?뚯씪 ?먯깋湲??숈옉 ?섑뻾',
+        tags: ['clipboard', 'file explorer', 'system'],
+        steps: [
+          S('entry', 'System ?≪뀡 ?좏깮', 'copy / reveal', '?ъ슜?먭? path/text 蹂듭궗 ?먮뒗 ?뚯씪 ?먯깋湲??닿린瑜??붿껌?⑸땲??', 'context menu action', 'src/lib/page', 'System workflow ?쒖옉'),
+          S('page', 'PageRouteServices ?몄텧', 'copyTextToClipboard / openPathInFileExplorer', 'runtime??二쇱엯??system service function???몄텧?⑸땲??', 'services.copyTextToClipboard(...)', 'src/lib/page/page-route-runtime-wiring.ts', 'System service 吏꾩엯'),
+          S('ipc', 'System command invoke', 'copy_text_to_clipboard / open_path_in_file_explorer', 'Tauri command DTO濡?OS ?묒뾽???붿껌?⑸땲??', 'invokeCommand(commandNames.*)', 'src/lib/services/system-service.ts', 'System IPC ?붿껌'),
+          S('rust', 'System command 泥섎━', 'system_commands', 'clipboard plugin ?먮뒗 opener瑜??ъ슜???뚮옯???묒뾽???ㅽ뻾?⑸땲??', 'copy_text_to_clipboard / open_path_in_file_explorer', 'src-tauri/src/commands/system_commands.rs', 'OS API ?몄텧'),
+          S('infra', '?댁쁺泥댁젣 諛섏쁺', 'Clipboard / Explorer', '?띿뒪?멸? clipboard????λ릺嫄곕굹 ???path媛 ?먯깋湲곗뿉???대┰?덈떎.', 'platform integration', 'Tauri plugins', '?쒖뒪???≪뀡 ?꾨즺'),
+          S('page', 'Status/?ㅻ쪟 ?쒖떆', 'toast or status', '?깃났 ?먮뒗 permission/path ?ㅻ쪟瑜??ъ슜?먯뿉寃??쒖떆?⑸땲??', 'errorMessage(error)', 'src/lib/page', 'UI ?쇰뱶諛??꾨즺'),
+        ]
+      },
+      {
+        id: 'pdf-annotations', group: 'Extensions', title: 'PDF Annotation Import쨌Export쨌Local Snapshot',
+        summary: 'PDF viewer媛 backend capability瑜??뺤씤????annotation import/export, package, flattened/incremental ??? local snapshot persistence command瑜??ъ슜?⑸땲??',
+        trigger: 'PDF viewer annotation ?묒뾽', result: '二쇱꽍 ?곹깭瑜?import/export?섍굅??濡쒖뺄 snapshot?쇰줈 ?곸냽??,
+        tags: ['PDF', 'annotations', 'import/export'],
+        steps: [
+          S('entry', 'PDF annotation ?≪뀡', 'import/export/save/load', 'PDF viewer ?먮뒗 toolbar媛 annotation ?묒뾽???붿껌?⑸땲??', 'Pdf viewer actions', 'src/lib/editor', 'PDF workflow ?쒖옉'),
+          S('page', 'Capability ?뺤씤', 'getPdfAnnotationBackendCapabilities', '?꾩옱 backend媛 吏?먰븯??export/import 諛⑹떇???뺤씤?⑸땲??', 'PdfDocumentService', 'src/lib/editor/PdfDocumentService.ts', '媛?ν븳 ?숈옉 寃곗젙'),
+          S('ipc', 'PDF command invoke', 'import/export/snapshot commands', 'annotation bytes, options, target path瑜?Tauri command濡??꾨떖?⑸땲??', 'commandNames.*PdfAnnotation*', 'src/lib/shared/ipc/command-names.ts', 'PDF IPC ?붿껌'),
+          S('rust', 'PDF command 泥섎━', 'pdf_annotation_commands', 'incremental, flattened, package import/export ?먮뒗 snapshot ??μ쓣 ?ㅽ뻾?⑸땲??', 'export_pdf_annotations_* / import_pdf_*', 'src-tauri/src/commands/pdf_annotation_commands.rs', 'Backend PDF 泥섎━'),
+          S('infra', 'PDF/file IO', 'read/transform/write', '?먮낯 PDF? annotation ?곗씠?곕? 寃고빀?섍굅??蹂꾨룄 package/snapshot??湲곕줉?⑸땲??', 'PDF backend', 'src-tauri/src/application', 'PDF 寃곌낵 ?뚯씪 ?앹꽦'),
+          S('page', 'Viewer ?곹깭 媛깆떊', 'annotation snapshot', '???寃곌낵, dirty ?곹깭, local snapshot??viewer??諛섏쁺?⑸땲??', 'pdf viewer controller', 'src/lib/editor', 'PDF annotation ?묒뾽 ?꾨즺'),
+        ]
+      },
+      {
+        id: 'document-anchors', group: 'Extensions', title: 'Document Anchor 議고쉶쨌???,
+        summary: '臾몄꽌 ?대? ?꾩튂? graph/editor ?곌껐???꾪빐 anchor 紐⑸줉??議고쉶?섍굅??upsert?섍퀬, DB index????λ맂 anchor瑜?UI??諛섏쁺?⑸땲??',
+        trigger: 'Anchor panel / editor position save', result: '臾몄꽌 anchor媛 DB? editor/graph UI???숆린??,
+        tags: ['anchors', 'upsert', 'document position'],
+        steps: [
+          S('entry', 'Anchor ?붿껌', 'get / upsert', '臾몄꽌 anchor 紐⑸줉???닿굅???꾩옱 ?꾩튂瑜???ν빀?덈떎.', 'DocumentAnchorService', 'src/lib/editor/DocumentAnchorService.ts', 'Anchor workflow ?쒖옉'),
+          S('feature', 'Anchor service DTO', 'document/path/position', 'workspace? document ?앸퀎?? anchor payload瑜?援ъ꽦?⑸땲??', 'DocumentAnchorsParams / UpsertDocumentAnchorParams', 'src/lib/editor/DocumentAnchorService.ts', 'Anchor DTO 以鍮?),
+          S('ipc', 'get_document_anchors / upsert_document_anchor', 'invokeCommand', 'Tauri backend??anchor 紐낅졊???꾨떖?⑸땲??', 'commandNames.getDocumentAnchors / upsertDocumentAnchor', 'src/lib/shared/ipc/command-names.ts', 'Anchor IPC ?붿껌'),
+          S('rust', 'Anchor command 泥섎━', 'index_commands', 'AppState index service媛 anchor 議고쉶 ?먮뒗 upsert瑜??섑뻾?⑸땲??', 'state.index.get/upsert_document_anchor', 'src-tauri/src/commands/index_commands.rs', 'Backend anchor 泥섎━'),
+          S('infra', 'DB anchor table', 'query / insert / update', 'document anchor瑜??곗씠?곕쿋?댁뒪????ν븯怨?理쒖떊 row瑜?諛섑솚?⑸땲??', 'DocumentAnchor', 'src-tauri/src/db', 'Anchor durable ?곹깭 媛깆떊'),
+          S('page', 'Editor/graph???곸슜', 'jump / badge / link', 'anchor 紐⑸줉, ?꾩튂 ?대룞, graph ?곌껐 ?쒖떆瑜?媛깆떊?⑸땲??', 'anchor UI state', 'src/lib/editor', 'Anchor workflow ?꾨즺'),
+        ]
+      },
+      {
+        id: 'page-unmount', group: 'App Lifecycle', title: 'Page Unmount & Resource Cleanup',
+        summary: 'Svelte 而댄룷?뚰듃媛 ?댁젣?섎㈃ destroyed guard瑜??몄슦怨?event disposable, render scheduler, theme listener, observer, input, GraphRuntime, renderer ?먯썝????닚?쇰줈 ?뺣━?⑸땲??',
+        trigger: 'PageRoute unmount / window teardown', result: 'event listener, worker, GPU, DOM observer ?꾩닔 諛⑹?',
+        tags: ['cleanup', 'dispose', 'destroy'],
+        steps: [
+          S('entry', 'Svelte unmount', 'onMount cleanup', '?쇱슦??援먯껜 ?먮뒗 window 醫낅즺濡?cleanup ?⑥닔媛 ?몄텧?⑸땲??', 'return () => {...}', 'src/lib/page/page-lifecycle.ts', 'Cleanup lifecycle ?쒖옉'),
+          S('page', 'Destroyed guard ?ㅼ젙', 'destroyed = true', '吏꾪뻾 以묒씤 鍮꾨룞湲?engine init???댄썑 ?앹꽦 ?먯썝??利됱떆 ?먭린?섎룄濡??쒖떆?⑸땲??', 'destroyed = true', 'src/lib/page/page-lifecycle.ts', '鍮꾨룞湲?race 李⑤떒'),
+          S('page', 'Page event ?댁젣', 'PageEventDisposables.dispose', 'focus, canvas, keyboard, drag/drop, workspace event listener瑜??쒓굅?⑸땲??', 'pageEvents.dispose()', 'src/lib/page/page-lifecycle.ts', '?대깽???곌껐 ?댁젣'),
+          S('page', 'Render / motion 痍⑥냼', 'renderRuntime.dispose + scheduler.dispose', '?덉빟??RAF? editor motion task瑜?痍⑥냼?⑸땲??', 'pageRenderRuntime(); editorMotionScheduler()', 'src/lib/page/page-lifecycle.ts', 'Animation task 醫낅즺'),
+          S('page', 'Resize / theme listener ?댁젣', 'observer.dispose + appTheme.dispose', 'ResizeObserver? system theme media listener瑜??쒓굅?⑸땲??', 'editorResize(); appTheme.dispose()', 'src/lib/page/page-route-lifecycle.svelte.ts', 'DOM observer ?뺣━'),
+          S('feature', 'Input / GraphRuntime destroy', 'inputHandler.destroy + graphRuntime.destroy', 'pointer binding怨?graph worker/render resource瑜?醫낅즺?⑸땲??', 'inputHandler(); graphRuntime()', 'src/lib/page/page-mounted-lifecycle-runtime.ts', 'Graph/input ?먯썝 ?뺣━'),
+          S('infra', 'Grid / backend destroy', 'gridRenderer + backend', 'GPU buffer, pipeline, canvas backend ?먯썝???댁젣?⑸땲??', 'gridRenderer.destroy(); backend.destroy()', 'src/lib/page/page-mounted-lifecycle-runtime.ts', 'GPU ?먯썝 ?댁젣'),
+          S('page', 'Controller ready ?곹깭 reset', 'setCameraReady(false)', '?댁젣??engine??UI媛 ???댁긽 李몄“?섏? ?딅룄濡??곹깭瑜?珥덇린?뷀빀?덈떎.', 'graphScene.setCameraReady(false)', 'src/lib/page/page-route-lifecycle.svelte.ts', 'Page cleanup ?꾨즺'),
+        ]
+      },
+    ];
+
+
+    const RELATION_KINDS = {
+      load:    { label: 'LOAD',    color: '#a78bfa' },
+      init:    { label: 'INIT',    color: '#60a5fa' },
+      restore: { label: 'RESTORE', color: '#c084fc' },
+      trigger: { label: 'TRIGGER', color: '#ffbf69' },
+      call:    { label: 'CALL',    color: '#7f8cff' },
+      event:   { label: 'EVENT',   color: '#4bd6c8' },
+      sync:    { label: 'SYNC',    color: '#38bdf8' },
+      apply:   { label: 'APPLY',   color: '#fb7185' },
+      reload:  { label: 'RELOAD',  color: '#34d399' },
+      extend:  { label: 'EXTEND',  color: '#f472b6' },
+      cleanup: { label: 'CLEANUP', color: '#94a3b8' },
+    };
+
+    const GROUP_RELATIONS = [
+      R('lifecycle-settings', 'App Lifecycle', 'Settings', 'load',
+        'page-mount', 'durable-preferences', 'onMount ??durableLoaders.*',
+        'Page mount媛 theme, zoom, graph쨌shortcut ?깆쓽 durable preference 蹂듭썝??蹂묐젹濡??쒖옉?⑸땲??'),
+      R('lifecycle-workspace', 'App Lifecycle', 'Workspace', 'load',
+        'page-mount', 'workspace-tree-load', 'onMount ??workspaceTree()',
+        'Page mount媛 workspace ?ㅼ젙怨?tree load瑜??몄텧??泥??붾㈃???먯깋 ?곹깭瑜?援ъ꽦?⑸땲??'),
+      R('lifecycle-graph', 'App Lifecycle', 'Graph', 'init',
+        'engine-init', 'graph-snapshot', 'runPageEngineInit ??GraphRuntime.init',
+        'Renderer 以鍮???GraphRuntime???앹꽦?섍퀬 document graph snapshot 濡쒕뱶瑜??몄텧?⑸땲??'),
+      R('lifecycle-editor', 'App Lifecycle', 'Document & Editor', 'restore',
+        'engine-init', 'editor-session', 'engine ready ??restoreEditorSessionState',
+        'Graph engine怨?overlay 湲곕컲??以鍮꾨맂 ???댁쟾 editor session??蹂듭썝?⑸땲??'),
+      R('lifecycle-extensions', 'App Lifecycle', 'Extensions', 'load',
+        'page-mount', 'community', 'durableLoaders.community()',
+        '珥덇린 mount?먯꽌 community catalog? ?ㅼ튂 ??ぉ??濡쒕뱶???뺤옣 湲곕뒫 ?곹깭瑜?以鍮꾪빀?덈떎.'),
+      R('workspace-editor', 'Workspace', 'Document & Editor', 'trigger',
+        'workspace-tree-load', 'document-open', 'row/node click ??openWorkspaceFile',
+        'Workspace row ?먮뒗 graph surface??open action??document read? editor open???몃━嫄고빀?덈떎.'),
+      R('workspace-index', 'Workspace', 'Search & Index', 'call',
+        'workspace-create-file', 'reindex', 'create/move/copy/trash ??watcher/reindex',
+        'Workspace mutation? ?뚯씪 媛먯떆 ?먮뒗 紐낆떆??reindex ?몄텧濡?寃???몃뜳?ㅻ? 媛깆떊?⑸땲??'),
+      R('editor-index', 'Document & Editor', 'Search & Index', 'call',
+        'document-save', 'reindex', 'saveDocument ??reindexChangedPaths',
+        '臾몄꽌 ???寃곌낵瑜?changed-path reindex濡??꾨떖??寃??寃곌낵? graph source瑜?理쒖떊?뷀빀?덈떎.'),
+      R('index-workspace', 'Search & Index', 'Workspace', 'event',
+        'reindex', 'workspace-tree-load', 'workspace-indexed ??loadWorkspaceTree',
+        '?됱씤 ?꾨즺 ?대깽?멸? workspace tree ?щ줈?쒕? ?붿껌???뚯씪 ?쒖뒪???곹깭瑜??붾㈃??諛섏쁺?⑸땲??'),
+      R('index-graph', 'Search & Index', 'Graph', 'event',
+        'reindex', 'graph-snapshot', 'workspace-indexed ??reloadSnapshot',
+        '?됱씤 ?꾨즺 ?대깽?멸? graph snapshot reload? HUD쨌overlay ?щ룞湲고솕瑜??몃━嫄고빀?덈떎.'),
+      R('graph-editor', 'Graph', 'Document & Editor', 'trigger',
+        'graph-interaction', 'document-open', 'graph node click ??openEditor',
+        'Graph node ?좏깮쨌?붾툝?대┃쨌而⑦뀓?ㅽ듃 ?≪뀡?????臾몄꽌??editor workflow瑜??쒖옉?⑸땲??'),
+      R('editor-graph', 'Document & Editor', 'Graph', 'sync',
+        'editor-close', 'graph-interaction', 'open/activate/close ??selection & occupancy sync',
+        'Editor ?쒖꽦?붿? ?リ린媛 graph selection, editor occupancy, overlay snapshot???숆린?뷀빀?덈떎.'),
+      R('settings-graph', 'Settings', 'Graph', 'apply',
+        'durable-preferences', 'render-loop', 'preferences apply ??runtime invalidation',
+        'Graph preference, zoom, theme ?곸슜 寃곌낵媛 runtime ?ㅼ젙怨?render invalidation??諛섏쁺?⑸땲??'),
+      R('extensions-settings', 'Extensions', 'Settings', 'reload',
+        'community', 'theme', 'theme install/remove ??reloadThemes',
+        'Community theme ?ㅼ튂쨌??젣媛 theme catalog? ?꾩옱 ?곸슜 theme ?щ줈?쒕? ?몄텧?⑸땲??'),
+      R('extensions-workspace', 'Extensions', 'Workspace', 'event',
+        'chat', 'workspace-tree-load', 'markdown write ??watcher ??tree reload',
+        'LLM ?묐떟 markdown ??μ씠 ?뚯씪 媛먯떆 ?대깽?몃? 留뚮뱾怨?workspace tree瑜??ㅼ떆 遺덈윭?듬땲??'),
+      R('extensions-editor', 'Extensions', 'Document & Editor', 'extend',
+        'collaboration', 'document-open', 'collab/PDF/anchor ??editor capability',
+        'Collaboration, PDF annotation, document anchor媛 ?대┛ 臾몄꽌???몄쭛 lifecycle???뺤옣?⑸땲??'),
+      R('graph-cleanup', 'Graph', 'App Lifecycle', 'cleanup',
+        'graph-snapshot', 'page-unmount', 'unmount ??GraphRuntime.destroy',
+        'Page unmount媛 graph worker, runtime, renderer, GPU ?먯썝??醫낅즺?⑸땲??'),
+      R('editor-cleanup', 'Document & Editor', 'App Lifecycle', 'cleanup',
+        'editor-session', 'page-unmount', 'session persist ??motion/resize dispose',
+        'Unmount ??editor session????ν븯怨?editor motion쨌resize 愿???먯썝???뺣━?⑸땲??'),
+      R('settings-cleanup', 'Settings', 'App Lifecycle', 'cleanup',
+        'theme', 'page-unmount', 'unmount ??appTheme.dispose',
+        'Unmount媛 system theme media listener? theme 愿??DOM ?곌껐???댁젣?⑸땲??'),
+    ];
+
+    function R(id, from, to, kind, fromFlow, toFlow, via, description) {
+      return { id, from, to, kind, fromFlow, toFlow, via, description };
+    }
+
+    function S(lane, title, code, desc, call, source, result, meta = {}) {
+      return {
+        lane,
+        title,
+        code,
+        desc,
+        call,
+        source,
+        result,
+        id: meta.id ?? '',
+        inputs: normalizeList(meta.inputs),
+        outputs: normalizeList(meta.outputs),
+      };
+    }
+
+    const CROSS_FUNCTION_EDGES = [
+      F('lifecycle-settings-functions', 'load',
+        'page-mount', 'loadDurableState',
+        'durable-preferences', 'preferencesSync.load',
+        'loadDurableState()', 'DurablePreferenceSync.load()',
+        'cached UI settings and backend snapshot request',
+        'durable preferences are merged into controller state',
+        'src/lib/page/page-lifecycle.ts -> src/lib/page/durable-preference-sync.ts'),
+      F('lifecycle-workspace-functions', 'load',
+        'page-mount', 'workspaceTree()',
+        'workspace-tree-load', 'durableLoaders.workspaceTree',
+        'workspaceTree()', 'loadWorkspaceTree()',
+        'active workspace context',
+        'workspace tree loading starts',
+        'src/lib/page/page-lifecycle.ts -> src/lib/page/page-route-lifecycle.svelte.ts'),
+      F('lifecycle-graph-functions', 'init',
+        'engine-init', 'GraphRuntime.init',
+        'graph-snapshot', 'GraphRuntime.reloadSnapshot',
+        'GraphRuntime instance and render backend',
+        'graph snapshot repository load',
+        'interactive graph runtime receives backend snapshot',
+        'src/lib/page/page-engine-init.ts -> src/lib/graph/core/GraphRuntime.ts'),
+      F('lifecycle-editor-functions', 'restore',
+        'engine-init', 'restoreEditorSessionState',
+        'editor-session', 'restoreEditorSessionState',
+        'engine-ready graph and overlay resources',
+        'editorSessionPersistenceActions.restoreEditorSessionState',
+        'saved editor layout is rebuilt after engine init',
+        'src/lib/page/page-engine-init.ts -> src/lib/page/full-editor-runtime.ts'),
+      F('lifecycle-extensions-functions', 'load',
+        'page-mount', 'community.load',
+        'community', 'CommunityController',
+        'mounted route controllers',
+        'CommunityController.load()',
+        'community catalog and installed extension state load',
+        'src/lib/page/page-route-lifecycle.svelte.ts -> src/lib/page/controllers/community-controller.svelte.ts'),
+      F('workspace-editor-functions', 'trigger',
+        'workspace-tree-load', 'workspacePanel.apply',
+        'document-open', 'handleWorkspaceRowClick',
+        'visible workspace tree row',
+        'openWorkspaceFile(path)',
+        'row or graph selection starts document open',
+        'src/lib/page/controllers/workspace-panel-controller.svelte.ts -> src/lib/page/workspace-interaction-runtime.ts'),
+      F('workspace-index-functions', 'call',
+        'workspace-create-file', 'CreateWorkspaceFileParams',
+        'reindex', 'reindexWorkspace / reindexChangedPaths',
+        'new workspace entry path',
+        'IndexingClient.reindex*()',
+        'workspace mutation produces reindex input',
+        'src-tauri/src/application/index_service.rs -> src/lib/page/page-route-runtime-wiring.ts'),
+      F('editor-index-functions', 'call',
+        'document-save', 'SaveDocumentParams',
+        'reindex', 'reindexWorkspace / reindexChangedPaths',
+        'saved document content and path',
+        'reindexChangedPaths({ paths })',
+        'document save refreshes search and graph index sources',
+        'src-tauri/src/application/index_service.rs -> src/lib/page/page-route-runtime-wiring.ts'),
+      F('index-workspace-functions', 'event',
+        'reindex', 'workspace-indexed',
+        'workspace-tree-load', 'durableLoaders.workspaceTree',
+        'workspace-indexed event',
+        'loadWorkspaceTree()',
+        'filesystem/index refresh reloads tree state',
+        'src/lib/services/workspace-index-events.ts -> src/lib/page/page-route-lifecycle.svelte.ts'),
+      F('index-graph-functions', 'event',
+        'reindex', 'handleWorkspaceIndexed',
+        'graph-snapshot', 'GraphRuntime.reloadSnapshot',
+        'workspace-indexed event',
+        'GraphRuntime.reloadSnapshot(options)',
+        'index event refreshes graph snapshot and overlays',
+        'src/lib/page/page-engine-init.ts -> src/lib/graph/core/GraphRuntime.ts'),
+      F('graph-editor-functions', 'trigger',
+        'graph-interaction', 'openGraphNode',
+        'document-open', 'handleWorkspaceRowClick',
+        'selected graph document node',
+        'openWorkspaceFile(path)',
+        'graph node action opens the matching editor document',
+        'src/lib/page/page-workspace-surface-runtime.ts -> src/lib/page/workspace-interaction-runtime.ts'),
+      F('editor-graph-functions', 'sync',
+        'editor-close', 'syncSelectionFromActiveEditor',
+        'graph-interaction', 'setGraphSelectedNodeId',
+        'active editor and occupancy snapshot',
+        'graphScene.setSelectedNodeId(...)',
+        'editor lifecycle keeps graph selection and space occupancy aligned',
+        'src/lib/page/editor-close-actions.ts -> src/lib/page/controllers/graph-scene-controller.svelte.ts'),
+      F('settings-graph-functions', 'apply',
+        'durable-preferences', 'applyValue',
+        'render-loop', 'requestRender("graph-runtime")',
+        'normalized preference value',
+        'requestRender(reason)',
+        'settings apply invalidates graph frame rendering',
+        'src/lib/page/durable-preference-sync.ts -> src/lib/page/page-render-scheduler.ts'),
+      F('extensions-settings-functions', 'reload',
+        'community', 'await reloadThemes',
+        'theme', 'load() / selectThemeMode() / reload()',
+        'installed theme package change',
+        'AppThemeController.reload()',
+        'community theme mutation reloads theme catalog and CSS',
+        'src/lib/page/controllers/community-controller.svelte.ts -> src/lib/page/controllers/app-theme-controller.svelte.ts'),
+      F('extensions-workspace-functions', 'event',
+        'chat', 'workspace-indexed event',
+        'workspace-tree-load', 'durableLoaders.workspaceTree',
+        'generated markdown file',
+        'loadWorkspaceTree()',
+        'chat output enters workspace tree through watcher/index event',
+        'src-tauri/src/indexer/file_watcher.rs -> src/lib/page/page-route-lifecycle.svelte.ts'),
+      F('extensions-editor-functions', 'extend',
+        'collaboration', 'collaboration.service.*',
+        'document-open', 'input.openEditor',
+        'collaborative document model or session',
+        'openEditor(node, options)',
+        'collaboration attaches document capability to editor workflow',
+        'src/lib/collaboration/CollaborationService.ts -> src/lib/page/workspace-file-open-actions.ts'),
+      F('graph-cleanup-functions', 'cleanup',
+        'graph-snapshot', 'syncWorkerGraph',
+        'page-unmount', 'inputHandler(); graphRuntime()',
+        'active graph worker and runtime resources',
+        'GraphRuntime.destroy()',
+        'unmount disposes graph worker/runtime resources',
+        'src/lib/graph/core/GraphRuntime.ts -> src/lib/page/page-mounted-lifecycle-runtime.ts'),
+      F('editor-cleanup-functions', 'cleanup',
+        'editor-session', 'persistEditorSessionState',
+        'page-unmount', 'pageRenderRuntime(); editorMotionScheduler()',
+        'persisted editor session snapshot',
+        'motion and render disposers',
+        'unmount persists editor state and cancels pending animation tasks',
+        'src/lib/page/full-editor-runtime-view-session-actions.ts -> src/lib/page/page-lifecycle.ts'),
+      F('settings-cleanup-functions', 'cleanup',
+        'theme', 'bindSystemThemeListener',
+        'page-unmount', 'editorResize(); appTheme.dispose()',
+        'system theme media listener',
+        'AppThemeController.dispose()',
+        'unmount releases theme and resize observers',
+        'src/lib/page/controllers/app-theme-controller.svelte.ts -> src/lib/page/page-route-lifecycle.svelte.ts'),
+    ];
+
+    enrichFlowSteps();
+    const FUNCTION_EDGES = [
+      ...buildSequentialFunctionEdges(),
+      ...CROSS_FUNCTION_EDGES.map(normalizeFunctionEdge),
+    ];
+
+    function F(id, kind, fromFlow, fromStep, toFlow, toStep, fromFunction, toFunction, payload, effect, source) {
+      return { id, kind, fromFlow, fromStep, toFlow, toStep, fromFunction, toFunction, payload, effect, source };
+    }
+
+    function normalizeList(value) {
+      if (Array.isArray(value)) return value.filter(Boolean);
+      if (value == null || value === '') return [];
+      return [String(value)];
+    }
+
+    function stepIdFor(flowId, index) {
+      return `${flowId}:${String(index + 1).padStart(2, '0')}`;
+    }
+
+    function enrichFlowSteps() {
+      FLOWS.forEach(flow => {
+        flow.steps.forEach((step, index) => {
+          step.id = step.id || stepIdFor(flow.id, index);
+          step.flowId = flow.id;
+          step.index = index;
+          step.inputs = normalizeList(step.inputs);
+          step.outputs = normalizeList(step.outputs);
+          if (!step.inputs.length) {
+            step.inputs = [index === 0 ? `Trigger: ${flow.trigger}` : flow.steps[index - 1].result];
+          }
+          if (!step.outputs.length) {
+            step.outputs = [step.result];
+          }
+        });
+      });
+    }
+
+    function resolveStepId(flowId, selector) {
+      const flow = flowById(flowId);
+      if (!flow) throw new Error(`Unknown flow: ${flowId}`);
+      if (Number.isInteger(selector)) {
+        const step = flow.steps[selector - 1];
+        if (!step) throw new Error(`Unknown step index ${selector} in ${flowId}`);
+        return step.id;
+      }
+      const selectorText = String(selector);
+      const direct = flow.steps.find(step => step.id === selectorText);
+      if (direct) return direct.id;
+      const query = selectorText.toLowerCase();
+      const matched = flow.steps.find(step => [
+        step.title,
+        step.code,
+        step.call,
+        step.source,
+      ].some(value => String(value).toLowerCase().includes(query)));
+      if (!matched) throw new Error(`Unknown step selector "${selectorText}" in ${flowId}`);
+      return matched.id;
+    }
+
+    function normalizeFunctionEdge(edge) {
+      return {
+        ...edge,
+        fromStep: resolveStepId(edge.fromFlow, edge.fromStep),
+        toStep: resolveStepId(edge.toFlow, edge.toStep),
+      };
+    }
+
+    function buildSequentialFunctionEdges() {
+      return FLOWS.flatMap(flow => flow.steps.slice(0, -1).map((step, index) => {
+        const next = flow.steps[index + 1];
+        return F(
+          `${flow.id}:${String(index + 1).padStart(2, '0')}-to-${String(index + 2).padStart(2, '0')}`,
+          'internal',
+          flow.id,
+          step.id,
+          flow.id,
+          next.id,
+          step.call,
+          next.call,
+          step.outputs.join('; '),
+          next.inputs.join('; '),
+          `${step.source} -> ${next.source}`,
+        );
+      }));
+    }
+
+    const state = {
+      flowIndex: 0,
+      stepIndex: 0,
+      playing: false,
+      timer: null,
+      speed: 1500,
+      loopAll: true,
+      filter: '',
+      showFlowRelations: true,
+      selectedSymbolId: '',
+    };
+
+    let CODEBASE_GRAPH = null;
+
+    const els = Object.fromEntries([
+      'flowList','flowSearch','groupCrumb','flowCrumb','flowGroup','flowTitle','flowSummary','heroMeta',
+      'currentStepTitle','currentStepDesc','progressLabel','progressPercent','progressBar','laneHeads',
+      'flowRelationMap','diagramWrap','diagramGrid','edgeLayer','detailRole','detailCall','detailSource',
+      'detailInputs','detailOutputs','detailEdges',
+      'logBody','boardScroll','prevButton','playButton','nextButton','speedSelect',
+      'loopToggle','resetButton','sidebar','menuButton','relationToggle'
+    ].map(id => [id, document.getElementById(id)]));
+
+    function currentFlow() { return FLOWS[state.flowIndex]; }
+    function currentStep() { return currentFlow().steps[state.stepIndex]; }
+
+    function renderLaneHeads() {
+      els.laneHeads.innerHTML = LANES.map(lane => `
+        <div class="lane-head">
+          <strong>${escapeHtml(lane.label)}</strong>
+          <span>${escapeHtml(lane.sub)}</span>
+        </div>
+      `).join('');
+    }
+
+    function flowById(id) {
+      return FLOWS.find(flow => flow.id === id) ?? null;
+    }
+
+    function flowIndexById(id) {
+      return FLOWS.findIndex(flow => flow.id === id);
+    }
+
+    function relationsForFlow(flowId) {
+      return GROUP_RELATIONS.filter(relation => relation.fromFlow === flowId || relation.toFlow === flowId);
+    }
+
+    function functionEdgesForFlow(flowId) {
+      return FUNCTION_EDGES.filter(edge => edge.fromFlow === flowId || edge.toFlow === flowId);
+    }
+
+    function crossFunctionEdgesForFlow(flowId) {
+      return functionEdgesForFlow(flowId).filter(edge => edge.fromFlow !== edge.toFlow);
+    }
+
+    function functionEdgesForStep(flowId, stepId) {
+      const incoming = FUNCTION_EDGES.filter(edge => edge.toFlow === flowId && edge.toStep === stepId);
+      const outgoing = FUNCTION_EDGES.filter(edge => edge.fromFlow === flowId && edge.fromStep === stepId);
+      return { incoming, outgoing };
+    }
+
+    function stepById(flowId, stepId) {
+      return flowById(flowId)?.steps.find(step => step.id === stepId) ?? null;
+    }
+
+    function stepLabel(flowId, stepId) {
+      const flow = flowById(flowId);
+      const step = stepById(flowId, stepId);
+      if (!flow || !step) return stepId;
+      return `${flow.title} / ${String(step.index + 1).padStart(2, '0')} ${step.title}`;
+    }
+
+    function boardNodeKey(flowId, stepId) {
+      return `${flowId}::${stepId}`;
+    }
+
+    function buildBoardProjection(flow) {
+      const crossEdges = crossFunctionEdgesForFlow(flow.id);
+      const rows = [];
+      const nodes = [];
+      const seen = new Set();
+
+      function addNode(flowId, stepId, role, edge = null) {
+        const step = stepById(flowId, stepId);
+        const nodeFlow = flowById(flowId);
+        if (!step || !nodeFlow) return;
+        const key = boardNodeKey(flowId, stepId);
+        if (seen.has(`${role}:${key}`)) return;
+        seen.add(`${role}:${key}`);
+        rows.push({ flowId, stepId, role, edge });
+        const laneIndex = Math.max(0, LANES.findIndex(lane => lane.id === step.lane));
+        nodes.push({
+          key,
+          role,
+          flowId,
+          stepId,
+          flow: nodeFlow,
+          step,
+          laneIndex,
+          row: rows.length,
+        });
+      }
+
+      crossEdges
+        .filter(edge => edge.toFlow === flow.id)
+        .forEach(edge => addNode(edge.fromFlow, edge.fromStep, 'incoming', edge));
+
+      flow.steps.forEach(step => addNode(flow.id, step.id, 'current'));
+
+      crossEdges
+        .filter(edge => edge.fromFlow === flow.id)
+        .forEach(edge => addNode(edge.toFlow, edge.toStep, 'outgoing', edge));
+
+      return { nodes, edges: crossEdges, rowCount: Math.max(rows.length, flow.steps.length) };
+    }
+
+    function renderBoardNode(node) {
+      const classes = [
+        'step-node',
+        `${node.role}-node`,
+        node.role !== 'current' ? 'context-node' : '',
+      ].filter(Boolean).join(' ');
+      const seq = node.role === 'current'
+        ? String(node.step.index + 1)
+        : node.role === 'incoming' ? 'IN' : 'OUT';
+      return `
+        <article class="${classes}"
+                 data-flow-id="${escapeHtml(node.flowId)}"
+                 data-step-id="${escapeHtml(node.stepId)}"
+                 data-node-key="${escapeHtml(node.key)}"
+                 ${node.flowId === currentFlow().id ? `data-step-index="${node.step.index}"` : ''}
+                 style="grid-column:${node.laneIndex + 1};grid-row:${node.row}">
+          <div class="node-topline">
+            <span class="node-seq">${escapeHtml(seq)}</span>
+            <span class="node-flow">${escapeHtml(node.flow.group)} / ${escapeHtml(node.flow.title)}</span>
+          </div>
+          <div class="node-title">${escapeHtml(node.step.title)}</div>
+          <div class="node-code">${escapeHtml(node.step.code)}</div>
+        </article>
+      `;
+    }
+
+    function graphSymbolsForStep(step) {
+      if (!CODEBASE_GRAPH?.symbols?.length) return [];
+      const callName = String(step.call || step.code || '').match(/[A-Za-z_$][\w$]*/)?.[0];
+      return CODEBASE_GRAPH.symbols.filter(symbol => {
+        if (symbol.repoPath !== step.source) return false;
+        if (!callName) return true;
+        return symbol.name === callName || String(symbol.signature || '').includes(callName);
+      }).slice(0, 3);
+    }
+
+    function sourceReferenceMarkup(step) {
+      const symbols = graphSymbolsForStep(step);
+      if (!symbols.length) return escapeHtml(step.source);
+      return symbols.map(symbol => {
+        const range = symbol.range;
+        const label = `${range.repoPath}:${range.startLine}${range.endLine !== range.startLine ? `-${range.endLine}` : ''}`;
+        return `<a href="${escapeHtml(range.githubUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(range.localPath || '')}" data-local-path="${escapeHtml(range.localPath || '')}">${escapeHtml(label)}</a>`;
+      }).join('<br>');
+    }
+
+    function codebaseSymbolById(symbolId) {
+      return CODEBASE_GRAPH?.symbols?.find(symbol => symbol.id === symbolId) ?? null;
+    }
+
+    function codebaseFileById(fileId) {
+      return CODEBASE_GRAPH?.files?.find(file => file.id === fileId) ?? null;
+    }
+
+    function symbolLocationLabel(symbol) {
+      const range = symbol?.range;
+      if (!range) return '';
+      return `${range.repoPath}:${range.startLine}${range.endLine !== range.startLine ? `-${range.endLine}` : ''}`;
+    }
+
+    function symbolSourceLink(symbol) {
+      if (!symbol?.range) return '';
+      const label = symbolLocationLabel(symbol);
+      return `<a href="${escapeHtml(symbol.range.githubUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(symbol.range.localPath || '')}" data-local-path="${escapeHtml(symbol.range.localPath || '')}">${escapeHtml(label)}</a>`;
+    }
+
+    function codebaseEdgesForSymbol(symbolId) {
+      if (!CODEBASE_GRAPH?.edges?.length) return { incoming: [], outgoing: [] };
+      return {
+        incoming: CODEBASE_GRAPH.edges.filter(edge => edge.to === symbolId && edge.from !== symbolId).slice(0, 24),
+        outgoing: CODEBASE_GRAPH.edges.filter(edge => edge.from === symbolId && edge.to && edge.to !== symbolId).slice(0, 24),
+      };
+    }
+
+    function codebaseSymbolSearchResults(query) {
+      if (!CODEBASE_GRAPH?.symbols?.length || query.length < 2) return [];
+      const normalized = query.toLowerCase();
+      return CODEBASE_GRAPH.symbols
+        .filter(symbol => [
+          symbol.name,
+          symbol.kind,
+          symbol.signature,
+          symbol.repoPath,
+          symbol.range?.repoPath,
+        ].some(value => String(value || '').toLowerCase().includes(normalized)))
+        .sort((a, b) => symbolSearchScore(b, normalized) - symbolSearchScore(a, normalized))
+        .slice(0, 12);
+    }
+
+    function symbolSearchScore(symbol, query) {
+      const name = String(symbol.name || '').toLowerCase();
+      const signature = String(symbol.signature || '').toLowerCase();
+      const path = String(symbol.range?.repoPath || symbol.repoPath || '').toLowerCase();
+      let score = 0;
+      if (name === query) score += 1000;
+      if (name.includes(query)) score += 300;
+      if (signature.includes(query)) score += 80;
+      if (path.includes(query)) score += 30;
+      if (symbol.kind === 'tauri-command') score += 220;
+      if (symbol.kind === 'event') score += 180;
+      if (symbol.exported) score += 20;
+      return score;
+    }
+
+    function renderSymbolSearchSection(query) {
+      const results = codebaseSymbolSearchResults(query);
+      if (!results.length) return '';
+      return `
+        <section class="symbol-search-section">
+          <div class="symbol-search-title">
+            <span>Code Symbols</span>
+            <span>${results.length}</span>
+          </div>
+          ${results.map(symbol => `
+            <button class="symbol-search-item" type="button" data-symbol-id="${escapeHtml(symbol.id)}">
+              <strong>${escapeHtml(symbol.name)}</strong>
+              <span>${escapeHtml(symbol.kind)} / ${escapeHtml(symbol.language)}</span>
+              <code>${escapeHtml(symbolLocationLabel(symbol))}</code>
+            </button>
+          `).join('')}
+        </section>
+      `;
+    }
+
+    function buildSymbolBoardProjection(symbolId) {
+      const target = codebaseSymbolById(symbolId);
+      if (!target) return null;
+      const { incoming, outgoing } = codebaseEdgesForSymbol(symbolId);
+      const nodes = [];
+      const seen = new Set();
+      const projectedEdges = [];
+
+      function addSymbolNode(symbol, role, row, laneIndex) {
+        if (!symbol || seen.has(symbol.id)) return;
+        seen.add(symbol.id);
+        nodes.push({ symbol, role, row, laneIndex });
+      }
+
+      function placeholderSymbol(edge, side) {
+        return {
+          id: `placeholder:${edge.id}:${side}`,
+          kind: edge.kind || 'edge',
+          name: edge.unresolvedName || edge.label || 'unresolved',
+          signature: edge.label || edge.unresolvedName || '',
+          language: 'unresolved',
+          repoPath: edge.range?.repoPath || '',
+          range: edge.range,
+          exported: false,
+        };
+      }
+
+      addSymbolNode(target, 'target', Math.max(1, Math.ceil(Math.max(incoming.length, outgoing.length, 1) / 2)), 2);
+      incoming.forEach((edge, index) => {
+        const peer = codebaseSymbolById(edge.from) || placeholderSymbol(edge, 'from');
+        addSymbolNode(peer, 'incoming', index + 1, 0);
+        projectedEdges.push({ ...edge, fromKey: peer.id, toKey: target.id, peerId: peer.id });
+      });
+      outgoing.forEach((edge, index) => {
+        const peer = codebaseSymbolById(edge.to) || placeholderSymbol(edge, 'to');
+        addSymbolNode(peer, 'outgoing', index + 1, 4);
+        projectedEdges.push({ ...edge, fromKey: target.id, toKey: peer.id, peerId: peer.id });
+      });
+
+      return {
+        target,
+        nodes,
+        edges: projectedEdges,
+        rowCount: Math.max(incoming.length, outgoing.length, 1),
+      };
+    }
+
+    function renderSymbolNode(node) {
+      const symbol = node.symbol;
+      const seq = node.role === 'target' ? 'SEL' : node.role === 'incoming' ? 'IN' : 'OUT';
+      return `
+        <article class="step-node symbol-node ${node.role === 'target' ? 'target-symbol' : 'context-node'}"
+                 data-symbol-id="${escapeHtml(symbol.id)}"
+                 data-node-key="${escapeHtml(symbol.id)}"
+                 style="grid-column:${node.laneIndex + 1} / span 2;grid-row:${node.row}">
+          <div class="node-topline">
+            <span class="node-seq">${escapeHtml(seq)}</span>
+            <span class="node-flow">${escapeHtml(symbol.kind)} / ${escapeHtml(symbol.language)}</span>
+          </div>
+          <div class="node-title">${escapeHtml(symbol.name)}</div>
+          <div class="node-code">${escapeHtml(symbolLocationLabel(symbol))}</div>
+        </article>
+      `;
+    }
+
+    function renderSymbolBoard(symbolId) {
+      const projection = buildSymbolBoardProjection(symbolId);
+      if (!projection) return;
+      const symbol = projection.target;
+      els.flowTitle.textContent = symbol.name;
+      els.flowSummary.textContent = symbol.signature || symbolLocationLabel(symbol);
+      els.flowGroup.textContent = 'Code Symbol Graph';
+      els.groupCrumb.textContent = 'Code Symbol Graph';
+      els.flowCrumb.textContent = symbol.name;
+      els.heroMeta.innerHTML = [
+        `<span class="meta-chip">${escapeHtml(symbol.kind)}</span>`,
+        `<span class="meta-chip">${escapeHtml(symbol.language)}</span>`,
+        `<span class="meta-chip">${escapeHtml(symbolLocationLabel(symbol))}</span>`,
+      ].join('');
+      els.currentStepTitle.textContent = symbol.name;
+      els.currentStepDesc.textContent = symbol.signature || '';
+      els.progressLabel.textContent = `${projection.edges.length} edges`;
+      els.progressPercent.textContent = CODEBASE_GRAPH?.stats ? `${CODEBASE_GRAPH.stats.symbols} symbols` : '';
+      els.progressBar.style.width = '100%';
+      els.detailRole.textContent = `${symbol.kind} / ${symbol.language}`;
+      els.detailCall.textContent = symbol.signature || symbol.name;
+      els.detailSource.innerHTML = symbolSourceLink(symbol);
+      els.detailInputs.innerHTML = renderDetailChipList(codebaseEdgesForSymbol(symbol.id).incoming.map(edge => edge.label || edge.kind).slice(0, 8));
+      els.detailOutputs.innerHTML = renderDetailChipList(codebaseEdgesForSymbol(symbol.id).outgoing.map(edge => edge.label || edge.kind).slice(0, 8));
+      els.detailEdges.innerHTML = projection.edges.slice(0, 12).map(edge => {
+        const peer = codebaseSymbolById(edge.peerId) || projection.nodes.find(node => node.symbol.id === edge.peerId)?.symbol;
+        return `<button class="detail-edge-card" type="button" data-symbol-id="${escapeHtml(peer?.id || '')}">
+          <strong>${escapeHtml(edge.kind.toUpperCase())} / ${escapeHtml(edge.confidence || '')}</strong>
+          <span>${escapeHtml(edge.label || edge.unresolvedName || '')}</span>
+          <code>${escapeHtml(peer ? symbolLocationLabel(peer) : 'unresolved')}</code>
+        </button>`;
+      }).join('') || '<span class="detail-chip">No symbol edges.</span>';
+      els.detailEdges.querySelectorAll('[data-symbol-id]').forEach(button => {
+        button.addEventListener('click', () => selectSymbolById(button.dataset.symbolId));
+      });
+      els.logBody.innerHTML = projection.edges.slice(0, 20).map((edge, index) => `
+        <div class="log-entry ${index === 0 ? 'current' : ''}">
+          <span class="log-time">${escapeHtml(edge.kind)}</span>
+          <span class="log-lane">${escapeHtml(edge.confidence || '')}</span>
+          <span>${escapeHtml(edge.label || edge.unresolvedName || '')}</span>
+        </div>
+      `).join('');
+      els.flowRelationMap.hidden = false;
+      els.flowRelationMap.innerHTML = `
+        <div class="flow-relation-layout">
+          <section class="flow-relation-column"><div class="flow-relation-column-head"><strong>Incoming symbols</strong><span class="flow-relation-badge">${codebaseEdgesForSymbol(symbol.id).incoming.length}</span></div></section>
+          <article class="flow-current-card"><div class="flow-current-label">Selected symbol</div><div class="flow-current-title">${escapeHtml(symbol.name)}</div><div class="flow-current-group">${symbolSourceLink(symbol)}</div></article>
+          <section class="flow-relation-column"><div class="flow-relation-column-head"><strong>Outgoing symbols</strong><span class="flow-relation-badge">${codebaseEdgesForSymbol(symbol.id).outgoing.length}</span></div></section>
+        </div>
+      `;
+      els.diagramGrid.style.gridTemplateRows = `repeat(${projection.rowCount}, minmax(94px, auto))`;
+      els.diagramGrid.innerHTML = projection.nodes.map(renderSymbolNode).join('');
+      els.diagramGrid.querySelectorAll('[data-symbol-id]').forEach(node => {
+        node.addEventListener('click', () => selectSymbolById(node.dataset.symbolId));
+      });
+      requestAnimationFrame(drawEdges);
+      renderSidebar();
+    }
+
+    function relationKind(relation) {
+      return RELATION_KINDS[relation.kind] ?? RELATION_KINDS.call;
+    }
+
+    function renderFlowRelationCard(relation, direction) {
+      const kind = relationKind(relation);
+      const targetFlowId = direction === 'incoming' ? relation.fromFlow : relation.toFlow;
+      const targetFlowTitle = flowById(targetFlowId)?.title ?? targetFlowId;
+      const fromFlowTitle = flowById(relation.fromFlow)?.title ?? relation.fromFlow;
+      const toFlowTitle = flowById(relation.toFlow)?.title ?? relation.toFlow;
+      const roleText = direction === 'incoming' ? '??flow瑜??щ뒗 ?곌껐' : '??flow媛 ?섍린???곌껐';
+      return `
+        <button class="flow-link-card"
+                type="button"
+                data-target-flow-id="${escapeHtml(targetFlowId)}"
+                style="--relation-color:${kind.color}"
+                title="${escapeHtml(relation.description)}">
+          <span class="flow-link-role">${roleText}</span>
+          <span class="flow-link-title">${escapeHtml(targetFlowTitle)}</span>
+          <span class="flow-link-route">${escapeHtml(`${fromFlowTitle} ??${toFlowTitle}`)}</span>
+          <span class="flow-link-meta">
+            <span>${escapeHtml(`${relation.from} ??${relation.to}`)}</span>
+            <span class="flow-link-kind">${kind.label}</span>
+          </span>
+          <code class="flow-link-via">via ${escapeHtml(relation.via)}</code>
+          <span class="flow-link-copy">${escapeHtml(relation.description)}</span>
+        </button>
+      `;
+    }
+
+    function renderFunctionEdgeCard(edge, direction) {
+      const targetFlowId = direction === 'incoming' ? edge.fromFlow : edge.toFlow;
+      const targetStepId = direction === 'incoming' ? edge.fromStep : edge.toStep;
+      const sourceLabel = stepLabel(edge.fromFlow, edge.fromStep);
+      const targetLabel = stepLabel(edge.toFlow, edge.toStep);
+      const fromStep = stepById(edge.fromFlow, edge.fromStep);
+      const toStep = stepById(edge.toFlow, edge.toStep);
+      return `
+        <button class="function-edge-card"
+                type="button"
+                data-target-flow-id="${escapeHtml(targetFlowId)}"
+                data-target-step-id="${escapeHtml(targetStepId)}">
+          <span class="function-edge-route">${escapeHtml(edge.fromFunction)} -> ${escapeHtml(edge.toFunction)}</span>
+          <span class="function-edge-meta">${escapeHtml(edge.payload)} / ${escapeHtml(edge.effect)}</span>
+          <span class="function-edge-source">${escapeHtml(sourceLabel)} -> ${escapeHtml(targetLabel)}</span>
+          <span class="function-edge-source">${fromStep ? sourceReferenceMarkup(fromStep) : escapeHtml(edge.source)} -> ${toStep ? sourceReferenceMarkup(toStep) : ''}</span>
+        </button>
+      `;
+    }
+
+    function renderFunctionEdgeSection(edges, direction) {
+      return `
+        <div class="function-edge-section">
+          <div class="function-edge-title">
+            <span>Function ${direction}</span>
+            <span class="flow-relation-badge">${edges.length}</span>
+          </div>
+          <div class="function-edge-list">
+            ${edges.length
+              ? edges.map(edge => renderFunctionEdgeCard(edge, direction)).join('')
+              : '<div class="flow-link-empty">No cross-flow function edges.</div>'}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderFlowRelationColumn(title, emptyText, relations, direction, functionEdges) {
+      return `
+        <section class="flow-relation-column">
+          <div class="flow-relation-column-head">
+            <strong>${title}</strong>
+            <span class="flow-relation-badge">${relations.length}</span>
+          </div>
+          <div class="flow-link-stack">
+            ${relations.length
+              ? relations.map(relation => renderFlowRelationCard(relation, direction)).join('')
+              : `<div class="flow-link-empty">${emptyText}</div>`}
+          </div>
+          ${renderFunctionEdgeSection(functionEdges, direction)}
+        </section>
+      `;
+    }
+
+    function renderFlowRelationMap() {
+      if (!els.flowRelationMap) return;
+      if (!state.showFlowRelations) {
+        els.flowRelationMap.hidden = true;
+        els.flowRelationMap.innerHTML = '';
+        return;
+      }
+
+      const flow = currentFlow();
+      const relations = relationsForFlow(flow.id);
+      const incoming = relations.filter(relation => relation.toFlow === flow.id);
+      const outgoing = relations.filter(relation => relation.fromFlow === flow.id);
+      const functionRelations = crossFunctionEdgesForFlow(flow.id);
+      const functionIncoming = functionRelations.filter(edge => edge.toFlow === flow.id);
+      const functionOutgoing = functionRelations.filter(edge => edge.fromFlow === flow.id);
+      els.flowRelationMap.hidden = false;
+      els.flowRelationMap.innerHTML = `
+        <div class="flow-relation-layout">
+          ${renderFlowRelationColumn('??flow瑜??щ뒗 ?곌껐', '?꾩옱 flow濡??ㅼ뼱?ㅻ뒗 吏곸젒 ?곌껐???놁뒿?덈떎.', incoming, 'incoming', functionIncoming)}
+          <article class="flow-current-card">
+            <div class="flow-current-label">?꾩옱 flow</div>
+            <div class="flow-current-title">${escapeHtml(flow.title)}</div>
+            <div class="flow-current-group">${escapeHtml(flow.group)}</div>
+            <div class="flow-current-stats">
+              <span>?ㅼ뼱??${incoming.length}</span>
+              <span>?섍? ${outgoing.length}</span>
+              <span>珥?${relations.length}</span>
+              <span>Fn in ${functionIncoming.length}</span>
+              <span>Fn out ${functionOutgoing.length}</span>
+            </div>
+          </article>
+          ${renderFlowRelationColumn('??flow媛 ?섍린???곌껐', '?꾩옱 flow?먯꽌 ?섍???吏곸젒 ?곌껐???놁뒿?덈떎.', outgoing, 'outgoing', functionOutgoing)}
+        </div>
+      `;
+
+      els.flowRelationMap.querySelectorAll('[data-target-flow-id]').forEach(button => {
+        button.addEventListener('click', () => {
+          selectFlowById(button.dataset.targetFlowId, button.dataset.targetStepId);
+        });
+      });
+    }
+
+    function renderSidebar() {
+      const query = state.filter.trim().toLowerCase();
+      const groups = new Map();
+      FLOWS.forEach((flow, index) => {
+        const relationText = relationsForFlow(flow.id).flatMap(relation => [
+          relation.from, relation.to, relation.via, relation.description, relationKind(relation).label,
+        ]);
+        const functionEdgeText = functionEdgesForFlow(flow.id).flatMap(edge => [
+          edge.fromFunction, edge.toFunction, edge.payload, edge.effect, edge.source,
+        ]);
+        const stepText = flow.steps.flatMap(s => [
+          s.id, s.title, s.code, s.call, s.source, ...s.inputs, ...s.outputs,
+        ]);
+        const haystack = [flow.group, flow.title, flow.summary, flow.tags.join(' '), ...relationText, ...functionEdgeText, ...stepText].join(' ').toLowerCase();
+        if (query && !haystack.includes(query)) return;
+        if (!groups.has(flow.group)) groups.set(flow.group, []);
+        groups.get(flow.group).push({flow,index});
+      });
+
+      const symbolSearchMarkup = renderSymbolSearchSection(query);
+
+      if (!groups.size && !symbolSearchMarkup) {
+        els.flowList.innerHTML = '<div class="empty-state">?쇱튂?섎뒗 ?먮쫫???놁뒿?덈떎.</div>';
+        return;
+      }
+
+      const activeGroup = currentFlow().group;
+      els.flowList.innerHTML = `
+        ${symbolSearchMarkup}
+        ${[...groups.entries()].map(([group, items]) => {
+          const isActiveGroup = group === activeGroup;
+          return `
+            <section class="group-block ${isActiveGroup ? 'active-group' : ''}" data-group="${escapeHtml(group)}">
+              <div class="group-title">
+                <span class="group-title-main"><span>${escapeHtml(group)}</span><span class="group-count">${items.length}</span></span>
+              </div>
+              ${items.map(({flow,index}) => {
+                const relationCount = relationsForFlow(flow.id).length;
+                return `
+                  <button class="flow-item ${index === state.flowIndex ? 'active' : ''}" data-flow-index="${index}">
+                    <span class="flow-index">${String(index + 1).padStart(2, '0')}</span>
+                    <span class="flow-name">${escapeHtml(flow.title)}</span>
+                    <span class="flow-meta">
+                      <span class="flow-relation-count" title="???먮쫫怨?吏곸젒 ?곌껐??Flow 愿怨???>${relationCount ? `??{relationCount}` : ''}</span>
+                      <span class="flow-step-count">${flow.steps.length}</span>
+                    </span>
+                  </button>
+                `;
+              }).join('')}
+            </section>
+          `;
+        }).join('')}
+      `;
+
+      els.flowList.querySelectorAll('.flow-item').forEach(button => {
+        button.addEventListener('click', () => {
+          selectFlow(Number(button.dataset.flowIndex));
+          els.sidebar.classList.remove('open');
+        });
+      });
+      els.flowList.querySelectorAll('[data-symbol-id]').forEach(button => {
+        button.addEventListener('click', () => {
+          selectSymbolById(button.dataset.symbolId);
+          els.sidebar.classList.remove('open');
+        });
+      });
+    }
+
+    function renderFlow() {
+      const flow = currentFlow();
+      els.groupCrumb.textContent = flow.group;
+      els.flowCrumb.textContent = flow.title;
+      els.flowGroup.textContent = flow.group;
+      els.flowTitle.textContent = flow.title;
+      els.flowSummary.textContent = flow.summary;
+      els.heroMeta.innerHTML = [
+        `<span class="meta-chip">Trigger 쨌 ${escapeHtml(flow.trigger)}</span>`,
+        `<span class="meta-chip">Result 쨌 ${escapeHtml(flow.result)}</span>`,
+        `<span class="meta-chip">${flow.steps.length} steps</span>`,
+        ...(relationsForFlow(flow.id).length ? [`<span class="meta-chip">Flow links 쨌 ${relationsForFlow(flow.id).length}</span>`] : []),
+        ...flow.tags.slice(0, 3).map(tag => `<span class="meta-chip">${escapeHtml(tag)}</span>`),
+      ].join('');
+
+      renderFlowRelationMap();
+      const boardProjection = buildBoardProjection(flow);
+      els.diagramGrid.dataset.projection = JSON.stringify({
+        edges: boardProjection.edges.map(edge => edge.id),
+      });
+      els.diagramGrid.style.gridTemplateRows = `repeat(${boardProjection.rowCount}, minmax(94px, auto))`;
+      els.edgeLayer.querySelectorAll('.edge').forEach(edge => edge.remove());
+      els.diagramGrid.innerHTML = boardProjection.nodes.map(renderBoardNode).join('');
+
+      els.diagramGrid.querySelectorAll('.step-node').forEach(node => {
+        node.addEventListener('click', () => {
+          if (node.dataset.flowId === flow.id && node.dataset.stepIndex) {
+            setStep(Number(node.dataset.stepIndex));
+          } else {
+            selectFlowById(node.dataset.flowId, node.dataset.stepId);
+          }
+        });
+      });
+
+      requestAnimationFrame(() => {
+        drawEdges();
+        renderStep();
+      });
+    }
+
+    function renderDetailChipList(values) {
+      return normalizeList(values).map(value => `<span class="detail-chip">${escapeHtml(value)}</span>`).join('');
+    }
+
+    function renderStepDetailEdge(edge, direction) {
+      const peerFlowId = direction === 'incoming' ? edge.fromFlow : edge.toFlow;
+      const peerStepId = direction === 'incoming' ? edge.fromStep : edge.toStep;
+      const peerLabel = stepLabel(peerFlowId, peerStepId);
+      const route = direction === 'incoming'
+        ? `${edge.fromFunction} -> ${edge.toFunction}`
+        : `${edge.fromFunction} -> ${edge.toFunction}`;
+      return `
+        <button class="detail-edge-card"
+                type="button"
+                data-target-flow-id="${escapeHtml(peerFlowId)}"
+                data-target-step-id="${escapeHtml(peerStepId)}">
+          <strong>${direction.toUpperCase()} / ${escapeHtml(route)}</strong>
+          <span>${escapeHtml(edge.payload)} / ${escapeHtml(edge.effect)}</span>
+          <code>${escapeHtml(peerLabel)}</code>
+          <span>${sourceReferenceMarkup(stepById(peerFlowId, peerStepId) || {})}</span>
+        </button>
+      `;
+    }
+
+    function renderStepFunctionDetails(flow, step) {
+      const { incoming, outgoing } = functionEdgesForStep(flow.id, step.id);
+      els.detailInputs.innerHTML = renderDetailChipList(step.inputs);
+      els.detailOutputs.innerHTML = renderDetailChipList(step.outputs);
+      els.detailEdges.innerHTML = [
+        ...incoming.map(edge => renderStepDetailEdge(edge, 'incoming')),
+        ...outgoing.map(edge => renderStepDetailEdge(edge, 'outgoing')),
+      ].join('') || '<span class="detail-chip">No function edges.</span>';
+      els.detailEdges.querySelectorAll('[data-target-flow-id]').forEach(button => {
+        button.addEventListener('click', () => {
+          selectFlowById(button.dataset.targetFlowId, button.dataset.targetStepId);
+        });
+      });
+    }
+
+    function renderStep() {
+      const flow = currentFlow();
+      const step = currentStep();
+      const nodes = [...els.diagramGrid.querySelectorAll('.step-node')];
+      nodes.forEach(node => {
+        const index = Number(node.dataset.stepIndex);
+        const isCurrentFlowNode = node.dataset.flowId === flow.id && Number.isFinite(index);
+        node.classList.toggle('done', isCurrentFlowNode && index < state.stepIndex);
+        node.classList.toggle('active', isCurrentFlowNode && index === state.stepIndex);
+        node.classList.toggle('pending', isCurrentFlowNode && index > state.stepIndex);
+      });
+
+      let activeEdge = null;
+      [...els.edgeLayer.querySelectorAll('.edge')].forEach(edge => {
+        const active = edge.dataset.activeStep === step.id;
+        edge.classList.toggle('done', false);
+        edge.classList.toggle('active', active);
+        if (active) activeEdge = edge;
+      });
+      activeEdge?.parentNode?.appendChild(activeEdge);
+
+      els.currentStepTitle.textContent = step.title;
+      els.currentStepDesc.textContent = step.desc;
+      const progress = ((state.stepIndex + 1) / flow.steps.length) * 100;
+      els.progressLabel.textContent = `${state.stepIndex + 1} / ${flow.steps.length}`;
+      els.progressPercent.textContent = `${Math.round(progress)}%`;
+      els.progressBar.style.width = `${progress}%`;
+      els.detailRole.textContent = `${LANES.find(l => l.id === step.lane).label} 怨꾩링?먯꽌 ${step.desc}`;
+      els.detailCall.textContent = step.call;
+      els.detailSource.innerHTML = sourceReferenceMarkup(step);
+      renderStepFunctionDetails(flow, step);
+
+      els.logBody.innerHTML = flow.steps.map((item, i) => `
+        <button class="log-entry ${i === state.stepIndex ? 'current' : ''}" data-step-index="${i}" type="button">
+          <span class="log-time">T+${String(i * 120).padStart(4,'0')}</span>
+          <span class="log-lane">${escapeHtml(item.lane.toUpperCase())}</span>
+          <span>${escapeHtml(item.call)} -> ${escapeHtml(item.result)}</span>
+        </button>
+      `).join('');
+      els.logBody.querySelectorAll('[data-step-index]').forEach(entry => {
+        entry.addEventListener('click', () => setStep(Number(entry.dataset.stepIndex)));
+      });
+      els.logBody.scrollTop = els.logBody.scrollHeight;
+
+      const activeLog = els.logBody.querySelector(`[data-step-index="${state.stepIndex}"]`);
+      activeLog?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      const activeNode = els.diagramGrid.querySelector(`[data-step-index="${state.stepIndex}"]`);
+      activeNode?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' });
+
+      updatePlayButton();
+    }
+
+    function drawEdges() {
+      if (state.selectedSymbolId) {
+        drawSymbolEdges();
+        return;
+      }
+      const nodes = [...els.diagramGrid.querySelectorAll('.step-node')];
+      const wrapRect = els.diagramWrap.getBoundingClientRect();
+      const width = els.diagramWrap.scrollWidth;
+      const height = els.diagramWrap.scrollHeight;
+      els.edgeLayer.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      els.edgeLayer.setAttribute('width', width);
+      els.edgeLayer.setAttribute('height', height);
+
+      const defs = els.edgeLayer.querySelector('defs')?.outerHTML || '';
+      const paths = [];
+      const rectFor = rect => {
+        const left = rect.left - wrapRect.left + els.boardScroll.scrollLeft;
+        const top = rect.top - wrapRect.top + els.boardScroll.scrollTop;
+        return {
+          left,
+          top,
+          right: left + rect.width,
+          bottom: top + rect.height,
+          centerX: left + rect.width / 2,
+          centerY: top + rect.height / 2,
+        };
+      };
+
+      const nodeByKey = new Map(nodes.map(node => [node.dataset.nodeKey, node]));
+      const flow = currentFlow();
+      const crossEdges = crossFunctionEdgesForFlow(flow.id);
+
+      crossEdges.forEach((edge, i) => {
+        const sourceNode = nodeByKey.get(boardNodeKey(edge.fromFlow, edge.fromStep));
+        const targetNode = nodeByKey.get(boardNodeKey(edge.toFlow, edge.toStep));
+        if (!sourceNode || !targetNode) return;
+        const a = rectFor(sourceNode.getBoundingClientRect());
+        const b = rectFor(targetNode.getBoundingClientRect());
+        const start = edge.fromFlow === flow.id
+          ? { x: a.centerX, y: a.bottom }
+          : { x: a.centerX, y: a.bottom };
+        const end = edge.toFlow === flow.id
+          ? { x: b.centerX, y: b.top }
+          : { x: b.centerX, y: b.top };
+        const sameColumn = Math.abs(start.x - end.x) < 8;
+        let d;
+        if (sameColumn) {
+          d = `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+        } else {
+          const gapY = Math.max(0, end.y - start.y);
+          const bendOffset = Math.min(18, Math.max(10, gapY * 0.32), gapY / 2);
+          const startBendY = start.y + bendOffset;
+          const endBendY = end.y - bendOffset;
+          const trunkX = start.x + (end.x - start.x) * 0.5;
+          d = `M ${start.x} ${start.y} L ${start.x} ${startBendY} L ${trunkX} ${startBendY} L ${trunkX} ${endBendY} L ${end.x} ${endBendY} L ${end.x} ${end.y}`;
+        }
+        const direction = edge.toFlow === flow.id ? 'incoming' : 'outgoing';
+        const activeStep = direction === 'incoming' ? edge.toStep : edge.fromStep;
+        paths.push({
+          index: i,
+          markup: `<path class="edge cross-edge ${direction}" data-edge-id="${escapeHtml(edge.id)}" data-active-step="${escapeHtml(activeStep)}" d="${d}" />`,
+        });
+      });
+      paths.sort((a, b) => a.index - b.index);
+      els.edgeLayer.innerHTML = defs + paths.map(path => path.markup).join('');
+      renderStep();
+    }
+
+    function drawSymbolEdges() {
+      const projection = buildSymbolBoardProjection(state.selectedSymbolId);
+      if (!projection) return;
+      const nodes = [...els.diagramGrid.querySelectorAll('.symbol-node')];
+      const wrapRect = els.diagramWrap.getBoundingClientRect();
+      const width = els.diagramWrap.scrollWidth;
+      const height = els.diagramWrap.scrollHeight;
+      els.edgeLayer.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      els.edgeLayer.setAttribute('width', width);
+      els.edgeLayer.setAttribute('height', height);
+      const defs = els.edgeLayer.querySelector('defs')?.outerHTML || '';
+      const nodeByKey = new Map(nodes.map(node => [node.dataset.nodeKey, node]));
+      const rectFor = rect => {
+        const left = rect.left - wrapRect.left + els.boardScroll.scrollLeft;
+        const top = rect.top - wrapRect.top + els.boardScroll.scrollTop;
+        return {
+          left,
+          top,
+          right: left + rect.width,
+          bottom: top + rect.height,
+          centerX: left + rect.width / 2,
+          centerY: top + rect.height / 2,
+        };
+      };
+      const paths = projection.edges.map((edge, index) => {
+        const sourceNode = nodeByKey.get(edge.fromKey || edge.from);
+        const targetNode = nodeByKey.get(edge.toKey || edge.to);
+        if (!sourceNode || !targetNode) return '';
+        const a = rectFor(sourceNode.getBoundingClientRect());
+        const b = rectFor(targetNode.getBoundingClientRect());
+        const start = { x: a.right, y: a.centerY };
+        const end = { x: b.left, y: b.centerY };
+        const trunkX = start.x + (end.x - start.x) * 0.5;
+        const d = `M ${start.x} ${start.y} C ${trunkX} ${start.y}, ${trunkX} ${end.y}, ${end.x} ${end.y}`;
+        const direction = edge.to === state.selectedSymbolId ? 'incoming' : 'outgoing';
+        return `<path class="edge cross-edge ${direction}" data-edge-id="${escapeHtml(edge.id)}" data-active-step="${escapeHtml(state.selectedSymbolId)}" d="${d}" />`;
+      }).filter(Boolean).join('');
+      els.edgeLayer.innerHTML = defs + paths;
+    }
+
+    function selectFlow(index, keepPlaying = true) {
+      const wasPlaying = state.playing;
+      stopTimer();
+      state.selectedSymbolId = '';
+      state.flowIndex = clamp(index, 0, FLOWS.length - 1);
+      state.stepIndex = 0;
+      renderFlow();
+      if (keepPlaying && wasPlaying) startTimer();
+    }
+
+    function selectFlowById(flowId, stepId = '') {
+      const targetIndex = flowIndexById(flowId);
+      if (targetIndex < 0) return;
+      state.filter = '';
+      els.flowSearch.value = '';
+      selectFlow(targetIndex);
+      if (stepId) {
+        const targetStepIndex = currentFlow().steps.findIndex(step => step.id === stepId);
+        if (targetStepIndex >= 0) setStep(targetStepIndex);
+      }
+      els.sidebar.classList.remove('open');
+    }
+
+    function selectSymbolById(symbolId) {
+      if (!codebaseSymbolById(symbolId)) return;
+      const wasPlaying = state.playing;
+      stopTimer();
+      state.selectedSymbolId = symbolId;
+      renderSymbolBoard(symbolId);
+      if (wasPlaying) pause();
+    }
+
+    function setStep(index) {
+      state.stepIndex = clamp(index, 0, currentFlow().steps.length - 1);
+      renderStep();
+      if (state.playing) restartTimer();
+    }
+
+    function nextStep() {
+      const flow = currentFlow();
+      if (state.stepIndex < flow.steps.length - 1) {
+        state.stepIndex += 1;
+        renderStep();
+        return;
+      }
+      if (state.loopAll) {
+        selectFlow((state.flowIndex + 1) % FLOWS.length, false);
+        if (state.playing) restartTimer();
+      } else {
+        pause();
+      }
+    }
+
+    function prevStep() {
+      if (state.stepIndex > 0) {
+        state.stepIndex -= 1;
+        renderStep();
+        return;
+      }
+      if (state.loopAll) {
+        const prevFlow = (state.flowIndex - 1 + FLOWS.length) % FLOWS.length;
+        state.flowIndex = prevFlow;
+        state.stepIndex = FLOWS[prevFlow].steps.length - 1;
+        renderFlow();
+      }
+    }
+
+    function play() {
+      state.playing = true;
+      startTimer();
+      updatePlayButton();
+    }
+
+    function pause() {
+      state.playing = false;
+      stopTimer();
+      updatePlayButton();
+    }
+
+    function togglePlay() { state.playing ? pause() : play(); }
+
+    function startTimer() {
+      stopTimer();
+      state.timer = window.setInterval(nextStep, state.speed);
+    }
+
+    function restartTimer() { if (state.playing) startTimer(); }
+
+    function stopTimer() {
+      if (state.timer) window.clearInterval(state.timer);
+      state.timer = null;
+    }
+
+    function updatePlayButton() {
+      els.playButton.innerHTML = state.playing ? '?싢씂 <span class="label">?쇱떆?뺤?</span>' : '??<span class="label">?ъ깮</span>';
+      els.playButton.setAttribute('aria-label', state.playing ? '?쇱떆?뺤?' : '?ъ깮');
+    }
+
+    function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+    }
+
+    async function loadCodebaseGraph() {
+      try {
+        const response = await fetch('generated/mindphase-codebase-graph.json', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        CODEBASE_GRAPH = await response.json();
+        if (state.selectedSymbolId) renderSymbolBoard(state.selectedSymbolId);
+        else renderFlow();
+        renderSidebar();
+      } catch (error) {
+        console.warn('[mindphase-learning] codebase graph unavailable:', error);
+      }
+    }
+
+    els.prevButton.addEventListener('click', () => { prevStep(); restartTimer(); });
+    els.nextButton.addEventListener('click', () => { nextStep(); restartTimer(); });
+    els.playButton.addEventListener('click', togglePlay);
+    els.resetButton.addEventListener('click', () => setStep(0));
+    els.speedSelect.addEventListener('change', event => {
+      state.speed = Number(event.target.value);
+      restartTimer();
+    });
+    els.loopToggle.addEventListener('change', event => { state.loopAll = event.target.checked; });
+    els.flowSearch.addEventListener('input', event => {
+      state.filter = event.target.value;
+      renderSidebar();
+    });
+    els.relationToggle.addEventListener('click', () => {
+      state.showFlowRelations = !state.showFlowRelations;
+      els.relationToggle.classList.toggle('active', state.showFlowRelations);
+      els.relationToggle.textContent = state.showFlowRelations ? 'ON' : 'OFF';
+      els.relationToggle.setAttribute('aria-pressed', String(state.showFlowRelations));
+      renderFlowRelationMap();
+    });
+    els.menuButton.addEventListener('click', () => els.sidebar.classList.toggle('open'));
+
+    document.addEventListener('click', event => {
+      if (window.innerWidth > 900) return;
+      if (!els.sidebar.classList.contains('open')) return;
+      if (els.sidebar.contains(event.target) || els.menuButton.contains(event.target)) return;
+      els.sidebar.classList.remove('open');
+    });
+
+    document.addEventListener('keydown', event => {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if (event.code === 'Space') { event.preventDefault(); togglePlay(); }
+      if (event.code === 'ArrowRight') { event.preventDefault(); nextStep(); restartTimer(); }
+      if (event.code === 'ArrowLeft') { event.preventDefault(); prevStep(); restartTimer(); }
+      if (event.code === 'Home') { event.preventDefault(); setStep(0); }
+      if (event.code === 'End') { event.preventDefault(); setStep(currentFlow().steps.length - 1); }
+    });
+
+    const resizeObserver = new ResizeObserver(() => requestAnimationFrame(drawEdges));
+    resizeObserver.observe(els.diagramWrap);
+    window.addEventListener('resize', () => requestAnimationFrame(drawEdges));
+
+    renderLaneHeads();
+    renderFlow();
+    void loadCodebaseGraph();
+  </script>
+</body>
+</html>

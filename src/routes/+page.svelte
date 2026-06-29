@@ -103,6 +103,20 @@
     return `${flow.title} / ${String(step.index + 1).padStart(2, '0')} ${step.title}`;
   }
 
+  function flowNumberLabel(flowId) {
+    const index = flowIndexById(flowId);
+    return index >= 0 ? String(index + 1).padStart(2, '0') : '--';
+  }
+
+  function stepNumberLabel(flowId, stepId) {
+    const step = stepById(flowId, stepId);
+    return step ? String(step.index + 1).padStart(2, '0') : '--';
+  }
+
+  function directionLabel(direction) {
+    return direction === 'incoming' ? 'Incoming' : 'Outgoing';
+  }
+
   function buildBoardProjection(flow) {
     const crossEdges = crossFunctionEdgesForFlow(flow.id);
     const rows = [];
@@ -612,6 +626,8 @@
             <span class="legend-item"><i class="legend-dot done"></i>Done</span>
             <span class="legend-item"><i class="legend-dot active"></i>Active</span>
             <span class="legend-item"><i class="legend-dot pending"></i>Pending</span>
+            <span class="legend-item direction-legend">{@render DirectionIcon('incoming')}<span>Incoming</span></span>
+            <span class="legend-item direction-legend">{@render DirectionIcon('outgoing')}<span>Outgoing</span></span>
           </div>
         </div>
 
@@ -629,7 +645,7 @@
                       {@const kind = relationKind(relation)}
                       {@const targetFlowId = relationTarget(relation, 'incoming')}
                       <button class="flow-link-card" type="button" style={`--relation-color:${kind.color}`} onclick={() => selectFlowStep(targetFlowId)}>
-                        <span class="flow-link-role">Incoming link</span>
+                        <span class="flow-link-role" title="Incoming link" aria-label="Incoming link">{@render DirectionIcon('incoming')}</span>
                         <span class="flow-link-title">{flowById(targetFlowId)?.title ?? targetFlowId}</span>
                         <span class="flow-link-route">{flowById(relation.fromFlow)?.title ?? relation.fromFlow} -&gt; {flowById(relation.toFlow)?.title ?? relation.toFlow}</span>
                         <span class="flow-link-meta"><span>{relation.from} -&gt; {relation.to}</span><span class="flow-link-kind">{kind.label}</span></span>
@@ -668,7 +684,7 @@
                       {@const kind = relationKind(relation)}
                       {@const targetFlowId = relationTarget(relation, 'outgoing')}
                       <button class="flow-link-card" type="button" style={`--relation-color:${kind.color}`} onclick={() => selectFlowStep(targetFlowId)}>
-                        <span class="flow-link-role">Outgoing link</span>
+                        <span class="flow-link-role" title="Outgoing link" aria-label="Outgoing link">{@render DirectionIcon('outgoing')}</span>
                         <span class="flow-link-title">{flowById(targetFlowId)?.title ?? targetFlowId}</span>
                         <span class="flow-link-route">{flowById(relation.fromFlow)?.title ?? relation.fromFlow} -&gt; {flowById(relation.toFlow)?.title ?? relation.toFlow}</span>
                         <span class="flow-link-meta"><span>{relation.from} -&gt; {relation.to}</span><span class="flow-link-kind">{kind.label}</span></span>
@@ -714,11 +730,16 @@
                   onclick={() => node.role === 'current' ? setStepByIndex(node.step.index) : selectFlowStep(node.flowId, node.stepId)}
                 >
                   <div class="node-topline">
-                    <span class="node-seq">{node.role === 'current' ? String(node.step.index + 1) : node.role === 'incoming' ? 'IN' : 'OUT'}</span>
-                    <span class="node-flow">{node.flow.group} / {node.flow.title}</span>
+                    <span class="node-seq" title={node.role === 'current' ? 'Current flow step' : `${directionLabel(node.role)} context step`} aria-label={node.role === 'current' ? 'Current flow step' : `${directionLabel(node.role)} context step`}>
+                      {#if node.role === 'current'}
+                        {stepNumberLabel(node.flowId, node.stepId)}
+                      {:else}
+                        {@render DirectionIcon(node.role)}
+                      {/if}
+                    </span>
+                    {@render FlowStepReference(node.flowId, node.stepId, 'compact')}
                   </div>
-                  <div class="node-title">{node.step.title}</div>
-                  <div class="node-code">{node.step.code}</div>
+                  <code class="node-code">{node.step.code}</code>
                 </button>
               {/each}
             </div>
@@ -768,7 +789,7 @@
               </div>
               <div class="detail-section">
                 <div class="detail-kicker">Call / Event</div>
-                <div class="detail-value">{currentStep.call}</div>
+                <code class="inline-code">{currentStep.call}</code>
               </div>
               <div class="detail-section">
                 <div class="detail-kicker">Source Path</div>
@@ -802,10 +823,19 @@
                   {#each [...stepFunctionDetails.incoming.map((edge) => ({ edge, direction: 'incoming' })), ...stepFunctionDetails.outgoing.map((edge) => ({ edge, direction: 'outgoing' }))] as item (item.edge.id + item.direction)}
                     {@const target = edgeTarget(item.edge, item.direction)}
                     {@const ref = sourceRefForEdge(item.edge, item.direction)}
-                    <button class="detail-edge-card" type="button" onclick={() => selectFlowStep(target.flowId, target.stepId)}>
-                      <strong>{item.direction.toUpperCase()} / {item.edge.fromFunction} -&gt; {item.edge.toFunction}</strong>
-                      <span>{item.edge.payload} / {item.edge.effect}</span>
-                      <code>{stepLabel(target.flowId, target.stepId)}</code>
+                    <button class="detail-edge-card" type="button" aria-label={`${directionLabel(item.direction)} function edge`} onclick={() => selectFlowStep(target.flowId, target.stepId)}>
+                      <span class="detail-edge-head">
+                        {@render DirectionIcon(item.direction)}
+                        <code class="inline-code">{item.edge.fromFunction}</code>
+                        <span class="code-arrow">-&gt;</span>
+                        <code class="inline-code">{item.edge.toFunction}</code>
+                      </span>
+                      <span class="detail-code-row">
+                        <code class="inline-code">{item.edge.payload}</code>
+                        <span class="flow-step-separator">/</span>
+                        <code class="inline-code">{item.edge.effect}</code>
+                      </span>
+                      {@render FlowStepReference(target.flowId, target.stepId, 'detail')}
                       <span>{ref.label}</span>
                     </button>
                   {:else}
@@ -845,20 +875,67 @@
   </main>
 </div>
 
+{#snippet DirectionIcon(direction)}
+  <svg class:incoming={direction === 'incoming'} class:outgoing={direction === 'outgoing'} class="direction-icon" viewBox="0 0 24 24" aria-hidden="true">
+    {#if direction === 'incoming'}
+      <path d="M5 7h8a6 6 0 0 1 6 6v4" />
+      <path d="m13 13 6 6 6-6" transform="translate(-6 -2)" />
+    {:else}
+      <path d="M5 17v-4a6 6 0 0 1 6-6h8" />
+      <path d="m13 5 6 6-6 6" />
+    {/if}
+  </svg>
+{/snippet}
+
+{#snippet FlowStepReference(flowId, stepId, variant)}
+  {@const flow = flowById(flowId)}
+  {@const step = stepById(flowId, stepId)}
+  {#if flow && step}
+    <span class:compact={variant === 'compact'} class:detail={variant === 'detail'} class:small={variant === 'small'} class="flow-step-ref">
+      <span class="flow-step-pill flow-pill">
+        <span class="flow-step-number">{flowNumberLabel(flowId)}</span>
+        <span>{flow.title}</span>
+      </span>
+      <span class="flow-step-separator">/</span>
+      <span class="flow-step-pill step-pill">
+        <span class="flow-step-number">{stepNumberLabel(flowId, stepId)}</span>
+        <span>{step.title}</span>
+      </span>
+    </span>
+  {:else}
+    <span class="flow-step-ref missing">{stepLabel(flowId, stepId)}</span>
+  {/if}
+{/snippet}
+
 {#snippet FunctionEdgeList(edges, direction, onselect)}
   <div class="function-edge-section">
-    <div class="function-edge-title">
-      <span>Function {direction}</span>
+    <div class="function-edge-title" aria-label={`Function ${directionLabel(direction).toLowerCase()} links`}>
+      <span class="function-edge-heading">
+        {@render DirectionIcon(direction)}
+        <span>Function</span>
+      </span>
       <span class="flow-relation-badge">{edges.length}</span>
     </div>
     <div class="function-edge-list">
       {#if edges.length}
         {#each edges as edge (edge.id)}
           {@const target = edgeTarget(edge, direction)}
-          <button class="function-edge-card" type="button" onclick={() => onselect(target.flowId, target.stepId)}>
-            <span class="function-edge-route">{edge.fromFunction} -&gt; {edge.toFunction}</span>
-            <span class="function-edge-meta">{edge.payload} / {edge.effect}</span>
-            <span class="function-edge-source">{stepLabel(edge.fromFlow, edge.fromStep)} -&gt; {stepLabel(edge.toFlow, edge.toStep)}</span>
+          <button class="function-edge-card" type="button" aria-label={`${directionLabel(direction)} function edge`} onclick={() => onselect(target.flowId, target.stepId)}>
+            <span class="function-edge-route">
+              <code class="inline-code">{edge.fromFunction}</code>
+              <span class="code-arrow">-&gt;</span>
+              <code class="inline-code">{edge.toFunction}</code>
+            </span>
+            <span class="function-edge-meta">
+              <code class="inline-code">{edge.payload}</code>
+              <span class="flow-step-separator">/</span>
+              <code class="inline-code">{edge.effect}</code>
+            </span>
+            <span class="function-edge-source">
+              {@render FlowStepReference(edge.fromFlow, edge.fromStep, 'small')}
+              <span class="code-arrow">-&gt;</span>
+              {@render FlowStepReference(edge.toFlow, edge.toStep, 'small')}
+            </span>
           </button>
         {/each}
       {:else}

@@ -595,8 +595,7 @@
     }
 
     .topbar {
-      position: sticky;
-      top: 0;
+      position: relative;
       z-index: 15;
       display: flex;
       align-items: center;
@@ -1566,15 +1565,29 @@
       .sidebar.open { transform: translateX(0); }
       .mobile-menu-button { display: inline-flex; }
       .app-main { padding: 14px; }
-      .topbar { top: 8px; }
       .hero { grid-template-columns: 1fr; }
       .hero-card { min-height: auto; }
       .side-stack { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 620px) {
-      .topbar { align-items: flex-start; }
-      .breadcrumb { padding-top: 7px; }
+      .topbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+      }
+      .breadcrumb {
+        width: 100%;
+        padding-top: 0;
+      }
+      .breadcrumb strong {
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      .controls {
+        width: 100%;
+        justify-content: flex-start;
+      }
       .controls { gap: 6px; }
       .control-button span.label { display: none; }
       .toggle-control span { display: none; }

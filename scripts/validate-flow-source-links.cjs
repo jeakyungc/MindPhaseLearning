@@ -64,7 +64,7 @@ function resolveSourceReference(graph, step) {
   return {
     file,
     symbol,
-    url: symbol?.range?.githubUrl || file?.githubUrl || null,
+    range: symbol?.range || (file ? { repoPath: file.repoPath, startLine: 1, endLine: 1 } : null),
     repoPath: symbol?.repoPath || file?.repoPath || step.source,
   };
 }
@@ -83,9 +83,9 @@ async function main() {
       const ref = resolveSourceReference(graph, step);
       const owner = `${flow.id}/${step.id || step.index}`;
       if (!ref.file) fail(`${owner} source path is missing from graph files: ${step.source}`);
-      if (!ref.url) fail(`${owner} source path has no URL: ${step.source}`);
       if (ref.repoPath !== step.source) fail(`${owner} resolved to ${ref.repoPath}, expected ${step.source}`);
-      if (ref.url) linked += 1;
+      if (!ref.range) fail(`${owner} source path has no local line range: ${step.source}`);
+      if (ref.range) linked += 1;
       if (ref.symbol) symbolLinked += 1;
       else if (ref.file) fileFallback += 1;
     }

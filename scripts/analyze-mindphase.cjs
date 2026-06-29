@@ -12,6 +12,7 @@ const rootDir = path.resolve(__dirname, "..");
 const defaultCacheSource = path.join(rootDir, ".cache", "mindphase-source");
 const tempSource = path.join(process.env.TEMP || process.env.TMP || rootDir, "mindphase-analysis-main");
 const outputPath = path.join(rootDir, "generated", "mindphase-codebase-graph.json");
+const staticOutputPath = path.join(rootDir, "static", "generated", "mindphase-codebase-graph.json");
 const repoFullName = process.env.MINDPHASE_REPOSITORY || "jeakyungc/MindPhase";
 const repoUrl = process.env.MINDPHASE_REPOSITORY_URL || `https://github.com/${repoFullName}.git`;
 const ref = process.env.MINDPHASE_REF || "main";
@@ -38,14 +39,18 @@ for (const absolutePath of sourceFiles) {
   const repoPath = slash(path.relative(sourceRoot, absolutePath));
   const text = fs.readFileSync(absolutePath, "utf8");
   const lines = text.split(/\r?\n/);
+  const treePathSegments = repoPath.split("/");
   const fileId = `file:${repoPath}`;
   fileIdByPath.set(repoPath, fileId);
   fileRecords.push({
     id: fileId,
     repoPath,
+    displayName: treePathSegments[treePathSegments.length - 1],
+    treePathSegments,
     localPath: absolutePath,
     language: languageFor(repoPath),
     lineCount: lines.length,
+    lines,
     githubUrl: githubUrl(repoPath, 1),
   });
   addModuleSymbol(fileId, repoPath, lines.length);
@@ -80,6 +85,7 @@ const graph = {
     },
   },
   files: fileRecords,
+  tree: buildFileTree(fileRecords),
   symbols,
   imports,
   edges,
@@ -94,8 +100,12 @@ const graph = {
 };
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-fs.writeFileSync(outputPath, `${JSON.stringify(graph, null, 2)}\n`, "utf8");
+fs.mkdirSync(path.dirname(staticOutputPath), { recursive: true });
+const serializedGraph = `${JSON.stringify(graph, null, 2)}\n`;
+fs.writeFileSync(outputPath, serializedGraph, "utf8");
+fs.writeFileSync(staticOutputPath, serializedGraph, "utf8");
 console.log(`[analyze] wrote ${path.relative(rootDir, outputPath)} from ${sourceRoot}`);
+console.log(`[analyze] wrote ${path.relative(rootDir, staticOutputPath)} for static serving`);
 console.log(
   `[analyze] ${graph.stats.files} files, ${graph.stats.symbols} symbols, ${graph.stats.imports} imports, ${graph.stats.edges} edges`,
 );
@@ -985,6 +995,54 @@ function edgeConfidenceCounts(edgeList) {
     counts[confidence] = (counts[confidence] || 0) + 1;
     return counts;
   }, {});
+}
+
+function buildFileTree(files) {
+  const root = { id: "dir:", name: "MindPhase", path: "", kind: "directory", children: [] };
+  const directories = new Map([["", root]]);
+
+  for (const file of files) {
+    let parent = root;
+    let currentPath = "";
+    const segments = file.treePathSegments || file.repoPath.split("/");
+    for (let index = 0; index < segments.length - 1; index += 1) {
+      currentPath = currentPath ? `${currentPath}/${segments[index]}` : segments[index];
+      let directory = directories.get(currentPath);
+      if (!directory) {
+        directory = {
+          id: `dir:${currentPath}`,
+          name: segments[index],
+          path: currentPath,
+          kind: "directory",
+          children: [],
+        };
+        directories.set(currentPath, directory);
+        parent.children.push(directory);
+      }
+      parent = directory;
+    }
+    parent.children.push({
+      id: file.id,
+      name: file.displayName || segments[segments.length - 1],
+      path: file.repoPath,
+      kind: "file",
+      fileId: file.id,
+      language: file.language,
+      lineCount: file.lineCount,
+    });
+  }
+
+  sortTree(root);
+  return root;
+}
+
+function sortTree(node) {
+  if (!node.children) return;
+  node.children.sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  for (const child of node.children) sortTree(child);
 }
 
 function range(repoPath, startLine, endLine) {

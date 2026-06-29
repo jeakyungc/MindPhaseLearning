@@ -33,8 +33,23 @@ function validateRange(owner, range, fileByRepoPath) {
   if (file) {
     assert(range.endLine <= file.lineCount, `${owner} range exceeds file line count`);
   }
-  assert(typeof range.githubUrl === "string" && range.githubUrl.includes("#L"), `${owner} is missing GitHub line URL`);
   assert(typeof range.localPath === "string" && range.localPath.length > 0, `${owner} is missing localPath`);
+}
+
+function validateTreeNode(node, fileByRepoPath, seenFiles) {
+  assert(node && typeof node === "object", "tree node is invalid");
+  assert(node.id && typeof node.id === "string", "tree node is missing id");
+  assert(node.kind === "directory" || node.kind === "file", `${node.id} has invalid kind`);
+  assert(typeof node.name === "string", `${node.id} is missing name`);
+
+  if (node.kind === "file") {
+    assert(fileByRepoPath.has(node.path), `${node.id} tree file path is missing from files: ${node.path}`);
+    seenFiles.add(node.path);
+    return;
+  }
+
+  assert(Array.isArray(node.children), `${node.id} directory is missing children`);
+  for (const child of node.children) validateTreeNode(child, fileByRepoPath, seenFiles);
 }
 
 const graph = readGraph();
@@ -46,6 +61,7 @@ const edges = Array.isArray(graph.edges) ? graph.edges : [];
 const fileById = new Map(files.map((file) => [file.id, file]));
 const fileByRepoPath = new Map(files.map((file) => [file.repoPath, file]));
 const symbolById = new Map(symbols.map((symbol) => [symbol.id, symbol]));
+const treeSeenFiles = new Set();
 
 assert(graph.metadata && graph.metadata.commitSha, "metadata.commitSha is missing");
 assert(graph.metadata && graph.metadata.sourceRoot, "metadata.sourceRoot is missing");
@@ -57,9 +73,15 @@ for (const file of files) {
   assert(file.id && file.id.startsWith("file:"), `file has invalid id: ${file.id}`);
   assert(file.repoPath && !path.isAbsolute(file.repoPath), `${file.id} has invalid repoPath`);
   assert(Number.isInteger(file.lineCount) && file.lineCount >= 1, `${file.id} has invalid lineCount`);
-  assert(typeof file.githubUrl === "string" && file.githubUrl.includes("#L1"), `${file.id} is missing GitHub URL`);
+  assert(Array.isArray(file.treePathSegments) && file.treePathSegments.join("/") === file.repoPath, `${file.id} has invalid treePathSegments`);
+  assert(typeof file.displayName === "string" && file.displayName.length > 0, `${file.id} is missing displayName`);
+  assert(Array.isArray(file.lines), `${file.id} is missing source lines`);
+  assert(file.lines.length === file.lineCount, `${file.id} line array does not match lineCount`);
   assert(typeof file.localPath === "string" && file.localPath.length > 0, `${file.id} is missing localPath`);
 }
+
+validateTreeNode(graph.tree, fileByRepoPath, treeSeenFiles);
+assert(treeSeenFiles.size === files.length, `tree contains ${treeSeenFiles.size} files, expected ${files.length}`);
 
 for (const symbol of symbols) {
   if (symbol.kind === "external-module") {

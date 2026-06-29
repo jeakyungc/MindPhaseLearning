@@ -20,10 +20,15 @@
   let loopAll = $state(true);
   let sidebarOpen = $state(false);
   let codebaseGraph = $state(null);
+  let selectedFilePath = $state('');
+  let selectedRange = $state(null);
+  let expandedTreeDirs = $state(new Set(['src', 'src/lib', 'src-tauri', 'src-tauri/src']));
   let timer = null;
+  let lastSyncedSourceKey = '';
   let diagramWrap;
   let edgeLayer;
   let logBody;
+  let codeScroller;
 
   const flowById = (id) => FLOWS.find((flow) => flow.id === id) ?? null;
   const flowIndexById = (id) => FLOWS.findIndex((flow) => flow.id === id);
@@ -50,6 +55,9 @@
   let symbolResults = $derived(symbolSearchResults(filter));
   let selectedSymbol = $derived(selectedSymbolId ? codebaseSymbolById(selectedSymbolId) : null);
   let analyzerChips = $derived(analyzerMetaChips());
+  let fileTreeRows = $derived(visibleFileTreeRows(codebaseGraph?.tree));
+  let selectedFile = $derived(codebaseFileByRepoPath(selectedFilePath) ?? codebaseGraph?.files?.[0] ?? null);
+  let selectedFileLines = $derived(selectedFile?.lines ?? []);
 
   onMount(() => {
     loadUrlSelection();
@@ -75,6 +83,24 @@
 
   $effect(() => {
     if (logBody) logBody.scrollTop = logBody.scrollHeight;
+  });
+
+  $effect(() => {
+    codebaseGraph;
+    currentStep?.id;
+    selectedSymbolId;
+    const ref = selectedSymbol ? sourceReferenceForSymbol(selectedSymbol) : sourceReference(currentStep);
+    const syncKey = `${codebaseGraph?.metadata?.generatedAt || 'loading'}:${ref?.repoPath || ''}:${ref?.startLine || ''}:${ref?.endLine || ''}:${selectedSymbolId || currentStep?.id || ''}`;
+    if (syncKey && syncKey !== lastSyncedSourceKey) {
+      lastSyncedSourceKey = syncKey;
+      focusSourceReference(ref, { updateUrl: true });
+    }
+  });
+
+  $effect(() => {
+    selectedFilePath;
+    selectedRange?.startLine;
+    void scrollActiveSourceLine();
   });
 
   function relationsForFlow(flowId) {
@@ -263,11 +289,13 @@
   }
 
   function selectSymbolById(symbolId) {
-    if (!codebaseSymbolById(symbolId)) return;
+    const symbol = codebaseSymbolById(symbolId);
+    if (!symbol) return;
     stopTimer();
     playing = false;
     selectedSymbolId = symbolId;
     sidebarOpen = false;
+    focusSourceReference(sourceReferenceForSymbol(symbol), { updateUrl: true });
   }
 
   async function loadCodebaseGraph() {
@@ -284,9 +312,16 @@
     const params = new URLSearchParams(window.location.search);
     const flowId = params.get('flow');
     const stepId = params.get('step');
+    const file = params.get('file');
+    const line = Number(params.get('line') || 0);
     if (flowId && flowById(flowId)) {
       selectedFlowId = flowId;
       selectedStepId = stepId && stepById(flowId, stepId) ? stepId : flowById(flowId).steps[0]?.id;
+    }
+    if (file) {
+      selectedFilePath = file;
+      selectedRange = Number.isInteger(line) && line > 0 ? { repoPath: file, startLine: line, endLine: line } : null;
+      expandDirsForFile(file);
     }
   }
 
@@ -294,6 +329,8 @@
     const url = new URL(window.location.href);
     url.searchParams.set('flow', selectedFlowId);
     if (selectedStepId) url.searchParams.set('step', selectedStepId);
+    if (selectedFilePath) url.searchParams.set('file', selectedFilePath);
+    if (selectedRange?.startLine) url.searchParams.set('line', String(selectedRange.startLine));
     window.history.replaceState({}, '', url);
   }
 
@@ -378,13 +415,101 @@
   function sourceReference(step) {
     const symbol = graphSymbolsForStep(step)[0];
     const file = codebaseFileByRepoPath(step?.source ?? '');
-    const line = symbol?.range?.startLine;
     return {
       label: step?.source ?? '',
-      url: symbol?.range?.githubUrl ?? file?.githubUrl ?? null,
       repoPath: symbol?.repoPath ?? file?.repoPath ?? step?.source ?? '',
-      line: line ?? 1
+      startLine: symbol?.range?.startLine ?? 1,
+      endLine: symbol?.range?.endLine ?? symbol?.range?.startLine ?? 1,
+      exact: Boolean(symbol),
+      symbolId: symbol?.id ?? ''
     };
+  }
+
+  function sourceReferenceForSymbol(symbol) {
+    const file = codebaseFileById(symbol?.fileId);
+    return {
+      label: symbolLocationLabel(symbol),
+      repoPath: file?.repoPath || symbol?.repoPath || '',
+      startLine: symbol?.range?.startLine ?? 1,
+      endLine: symbol?.range?.endLine ?? symbol?.range?.startLine ?? 1,
+      exact: Boolean(symbol?.range),
+      symbolId: symbol?.id ?? ''
+    };
+  }
+
+  function focusSourceReference(ref, options = {}) {
+    if (!ref?.repoPath) return;
+    if (!codebaseFileByRepoPath(ref.repoPath)) return;
+    selectedFilePath = ref.repoPath;
+    selectedRange = {
+      repoPath: ref.repoPath,
+      startLine: Math.max(1, ref.startLine || 1),
+      endLine: Math.max(ref.startLine || 1, ref.endLine || ref.startLine || 1),
+      exact: ref.exact,
+      symbolId: ref.symbolId || ''
+    };
+    expandDirsForFile(ref.repoPath);
+    if (options.updateUrl) updateUrlSelection();
+  }
+
+  function selectFile(repoPath) {
+    const file = codebaseFileByRepoPath(repoPath);
+    if (!file) return;
+    selectedFilePath = file.repoPath;
+    selectedRange = null;
+    expandDirsForFile(file.repoPath);
+    updateUrlSelection();
+  }
+
+  function toggleTreeDir(path) {
+    const next = new Set(expandedTreeDirs);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
+    expandedTreeDirs = next;
+  }
+
+  function expandDirsForFile(repoPath) {
+    const segments = String(repoPath || '').split('/');
+    const next = new Set(expandedTreeDirs);
+    let current = '';
+    for (let index = 0; index < segments.length - 1; index += 1) {
+      current = current ? `${current}/${segments[index]}` : segments[index];
+      next.add(current);
+    }
+    expandedTreeDirs = next;
+  }
+
+  function visibleFileTreeRows(root) {
+    if (!root?.children) return [];
+    const rows = [];
+    function visit(node, depth) {
+      if (node.kind !== 'directory') {
+        rows.push({ node, depth, expanded: false });
+        return;
+      }
+      if (node.path) rows.push({ node, depth, expanded: expandedTreeDirs.has(node.path) });
+      if (!node.path || expandedTreeDirs.has(node.path)) {
+        for (const child of node.children || []) visit(child, node.path ? depth + 1 : depth);
+      }
+    }
+    visit(root, 0);
+    return rows;
+  }
+
+  async function scrollActiveSourceLine() {
+    await tick();
+    if (!codeScroller || !selectedRange?.startLine) return;
+    const line = codeScroller.querySelector(`[data-code-line="${selectedRange.startLine}"]`);
+    line?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+  }
+
+  function sourceLineInRange(lineNumber) {
+    return Boolean(
+      selectedRange &&
+      selectedRange.repoPath === selectedFile?.repoPath &&
+      selectedRange.startLine <= lineNumber &&
+      lineNumber <= selectedRange.endLine
+    );
   }
 
   function callReferenceTokens(step) {
@@ -660,7 +785,8 @@
     </section>
 
     <section class="content-grid">
-      <article class="flow-board">
+      <section class="primary-stack">
+        <article class="flow-board">
         <div class="board-head">
           <div>
             <h3>Call Relationship Animation</h3>
@@ -791,7 +917,58 @@
             </div>
           </div>
         </div>
-      </article>
+        </article>
+
+        <article class="code-browser">
+          <div class="panel-head">
+            <div>
+              <h3>Codebase Source</h3>
+              <p>Static source snapshot with file tree, full-file view, and selected line range focus.</p>
+            </div>
+            {#if selectedRange?.exact}
+              <span class="range-badge">L{selectedRange.startLine}-L{selectedRange.endLine}</span>
+            {:else if selectedRange}
+              <span class="range-badge muted">File fallback</span>
+            {/if}
+          </div>
+          <div class="code-browser-layout">
+            <div class="file-tree" aria-label="Codebase file tree">
+              {#if fileTreeRows.length}
+                {#each fileTreeRows as row (row.node.id)}
+                  <button
+                    class:active={row.node.kind === 'file' && row.node.path === selectedFile?.repoPath}
+                    class:directory={row.node.kind === 'directory'}
+                    class:file={row.node.kind === 'file'}
+                    class="file-tree-row"
+                    style={`--depth:${row.depth}`}
+                    type="button"
+                    onclick={() => row.node.kind === 'directory' ? toggleTreeDir(row.node.path) : selectFile(row.node.path)}
+                  >
+                    <span class="tree-icon">{row.node.kind === 'directory' ? (row.expanded ? '-' : '+') : '·'}</span>
+                    <span class="tree-name">{row.node.name}</span>
+                    {#if row.node.kind === 'file'}
+                      <span class="tree-meta">{row.node.lineCount}</span>
+                    {/if}
+                  </button>
+                {/each}
+              {:else}
+                <div class="empty-state">Source snapshot is loading.</div>
+              {/if}
+            </div>
+            <div class="source-viewer">
+              <div class="source-toolbar">
+                <code>{selectedFile?.repoPath || 'No file selected'}</code>
+                <span>{selectedFile?.language || ''}{selectedFile ? ` / ${selectedFile.lineCount} lines` : ''}</span>
+              </div>
+              <div class="source-code" bind:this={codeScroller}>{#each selectedFileLines as line, index (index)}<div
+                    class:active-line={sourceLineInRange(index + 1)}
+                    class="source-line"
+                    data-code-line={index + 1}
+                  ><span class="line-number">{index + 1}</span><code>{line || ' '}</code></div>{/each}</div>
+            </div>
+          </div>
+        </article>
+      </section>
 
       <aside class="side-stack">
         <article class="detail-panel">
@@ -839,13 +1016,7 @@
               </div>
               <div class="detail-section">
                 <div class="detail-kicker">Source Path</div>
-                <code class="source-path">
-                  {#if currentSourceRef.url}
-                    <a href={currentSourceRef.url} target="_blank" rel="noreferrer">{currentSourceRef.label}</a>
-                  {:else}
-                    {currentSourceRef.label}
-                  {/if}
-                </code>
+                <code class="source-path">{currentSourceRef.label}:L{currentSourceRef.startLine}-L{currentSourceRef.endLine}</code>
               </div>
               <div class="detail-section">
                 <div class="detail-kicker">Function Inputs</div>

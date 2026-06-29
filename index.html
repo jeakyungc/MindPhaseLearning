@@ -1,0 +1,2994 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>MindPhase Business Logic Lifecycle Visualizer</title>
+  <style>
+    :root {
+      --bg: #080b12;
+      --panel: rgba(16, 21, 33, 0.9);
+      --panel-2: rgba(21, 28, 44, 0.84);
+      --panel-3: rgba(30, 39, 58, 0.72);
+      --border: rgba(151, 166, 207, 0.18);
+      --border-strong: rgba(151, 166, 207, 0.34);
+      --text: #f2f5ff;
+      --muted: #9fa9bf;
+      --muted-2: #747f98;
+      --accent: #7f8cff;
+      --accent-2: #4bd6c8;
+      --accent-3: #ffbf69;
+      --danger: #ff7f91;
+      --success: #7ee2a8;
+      --shadow: 0 18px 60px rgba(0, 0, 0, 0.34);
+      --radius-lg: 24px;
+      --radius-md: 16px;
+      --radius-sm: 11px;
+      --speed: 1.35s;
+      --sidebar-width: 360px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+      margin: 0;
+      background:
+        radial-gradient(circle at 12% 8%, rgba(85, 100, 255, 0.18), transparent 26rem),
+        radial-gradient(circle at 88% 4%, rgba(63, 207, 192, 0.11), transparent 30rem),
+        linear-gradient(160deg, #090c14 0%, #070910 48%, #090d17 100%);
+      color: var(--text);
+      font-family: Inter, Pretendard, "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body { overflow-x: hidden; }
+
+    button, input, select { font: inherit; }
+
+    button {
+      color: inherit;
+      border: 0;
+      cursor: pointer;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    .flow-item:focus-visible {
+      outline: 2px solid #a8b1ff;
+      outline-offset: 2px;
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: rgba(7, 10, 17, 0.84);
+      backdrop-filter: blur(24px);
+      z-index: 20;
+    }
+
+    .brand {
+      padding: 24px 22px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-mark {
+      width: 42px;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      background:
+        linear-gradient(145deg, rgba(127, 140, 255, 0.9), rgba(75, 214, 200, 0.62));
+      box-shadow: 0 10px 32px rgba(92, 111, 255, 0.28);
+      font-weight: 900;
+      letter-spacing: -0.05em;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: -0.02em;
+    }
+
+    .brand p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .search-wrap { padding: 14px 16px 8px; }
+
+    .search-wrap input {
+      width: 100%;
+      height: 40px;
+      padding: 0 13px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.045);
+    }
+
+    .search-wrap input::placeholder { color: var(--muted-2); }
+
+    .flow-list {
+      overflow: auto;
+      padding: 6px 10px 20px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(160, 172, 205, 0.28) transparent;
+    }
+
+    .group-block { margin: 10px 0 16px; }
+
+    .group-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px 7px;
+      color: var(--muted-2);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .group-count {
+      min-width: 22px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      text-align: center;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .flow-item {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 9px;
+      padding: 10px 10px;
+      border-radius: 12px;
+      text-align: left;
+      background: transparent;
+      transition: background 160ms ease, transform 160ms ease, color 160ms ease;
+    }
+
+    .flow-item:hover { background: rgba(255, 255, 255, 0.052); }
+
+    .flow-item.active {
+      background: linear-gradient(90deg, rgba(127, 140, 255, 0.2), rgba(75, 214, 200, 0.07));
+      box-shadow: inset 0 0 0 1px rgba(139, 150, 255, 0.25);
+    }
+
+    .flow-index {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.055);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .flow-item.active .flow-index {
+      color: white;
+      background: linear-gradient(145deg, #7684ff, #4cbfc0);
+    }
+
+    .flow-name {
+      overflow: hidden;
+      color: #d8def0;
+      font-size: 12px;
+      font-weight: 680;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .flow-step-count {
+      color: var(--muted-2);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+
+    .relation-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: rgba(255, 255, 255, 0.032);
+    }
+
+    .relation-toolbar div {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+
+    .relation-toolbar strong {
+      color: #dfe5f7;
+      font-size: 10px;
+      letter-spacing: 0.02em;
+    }
+
+    .relation-toolbar span {
+      overflow: hidden;
+      color: var(--muted-2);
+      font-size: 9px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .relation-toggle {
+      min-width: 38px;
+      height: 25px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.045);
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 0.07em;
+    }
+
+    .relation-toggle.active {
+      color: #f4f7ff;
+      border-color: rgba(75, 214, 200, 0.42);
+      background: rgba(75, 214, 200, 0.16);
+    }
+
+    .relation-legend {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 5px;
+      margin-top: 7px;
+      color: var(--muted-2);
+      font-size: 8px;
+    }
+
+    .relation-legend span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      white-space: nowrap;
+    }
+
+    .relation-swatch {
+      width: 6px;
+      height: 6px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: #7f8cff;
+      box-shadow: 0 0 9px currentColor;
+    }
+
+    .relation-swatch.event { background: #4bd6c8; }
+    .relation-swatch.sync { background: #38bdf8; }
+    .relation-swatch.cleanup { background: #94a3b8; }
+
+    .group-title {
+      position: relative;
+      min-height: 25px;
+    }
+
+    .group-title-main {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .group-block.active-group .group-title { color: #dbe1f6; }
+
+    .flow-meta {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .flow-relation-count {
+      min-width: 22px;
+      padding: 2px 5px;
+      border-radius: 999px;
+      color: #8dded6;
+      background: rgba(75, 214, 200, 0.075);
+      font-size: 8px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .flow-relation-count:empty { display: none; }
+
+    .flow-relation-map[hidden] { display: none; }
+
+    .flow-relation-map {
+      padding: 15px 18px 17px;
+      border-bottom: 1px solid var(--border);
+      background:
+        linear-gradient(90deg, rgba(127, 140, 255, 0.06), rgba(75, 214, 200, 0.026)),
+        rgba(255, 255, 255, 0.014);
+    }
+
+    .flow-relation-layout {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(230px, 0.9fr) minmax(220px, 1fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .flow-relation-column,
+    .flow-current-card {
+      min-width: 0;
+      border: 1px solid rgba(151, 166, 207, 0.14);
+      border-radius: 8px;
+      background: rgba(8, 12, 20, 0.32);
+    }
+
+    .flow-relation-column {
+      padding: 11px;
+    }
+
+    .flow-relation-column-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 9px;
+    }
+
+    .flow-relation-column-head strong {
+      min-width: 0;
+      color: #dce3f5;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .flow-relation-badge {
+      min-width: 24px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      color: #9ee5dc;
+      background: rgba(75, 214, 200, 0.08);
+      font-size: 9px;
+      font-weight: 850;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .flow-link-stack {
+      display: grid;
+      gap: 8px;
+    }
+
+    .flow-link-empty {
+      min-height: 72px;
+      display: grid;
+      place-items: center;
+      padding: 12px;
+      border: 1px dashed rgba(151, 166, 207, 0.16);
+      border-radius: 8px;
+      color: var(--muted-2);
+      font-size: 10px;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .flow-link-card {
+      --relation-color: #7f8cff;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 126px;
+      padding: 10px;
+      border: 1px solid color-mix(in srgb, var(--relation-color) 24%, transparent);
+      border-radius: 8px;
+      text-align: left;
+      background: color-mix(in srgb, var(--relation-color) 7%, rgba(10, 14, 23, 0.8));
+      transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+    }
+
+    .flow-link-card:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--relation-color) 52%, transparent);
+      background: color-mix(in srgb, var(--relation-color) 12%, rgba(10, 14, 23, 0.86));
+    }
+
+    .flow-link-role {
+      color: var(--relation-color);
+      font-size: 9px;
+      font-weight: 850;
+    }
+
+    .flow-link-title {
+      color: #eef2ff;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .flow-link-route {
+      color: #c5cede;
+      font-size: 10px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .flow-link-meta {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .flow-link-kind {
+      padding: 2px 6px;
+      border-radius: 999px;
+      color: var(--relation-color);
+      background: color-mix(in srgb, var(--relation-color) 12%, transparent);
+      font-size: 9px;
+      font-weight: 850;
+    }
+
+    .flow-link-via {
+      display: block;
+      color: #b8c4e0;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 9px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .flow-link-copy {
+      color: #aab4ca;
+      font-size: 10px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .function-edge-section {
+      margin-top: 11px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(151, 166, 207, 0.1);
+    }
+
+    .function-edge-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+      color: #dce3f5;
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .function-edge-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .function-edge-card {
+      width: 100%;
+      display: grid;
+      gap: 5px;
+      padding: 9px;
+      border: 1px solid rgba(75, 214, 200, 0.18);
+      border-radius: 8px;
+      background: rgba(75, 214, 200, 0.055);
+      text-align: left;
+    }
+
+    .function-edge-route {
+      color: #eef2ff;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 9px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .function-edge-meta,
+    .function-edge-source {
+      color: var(--muted);
+      font-size: 9px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .function-edge-source { color: #8ea0c6; }
+
+    .flow-current-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 11px;
+      padding: 16px;
+      border-color: rgba(127, 140, 255, 0.36);
+      background:
+        linear-gradient(145deg, rgba(127, 140, 255, 0.16), rgba(75, 214, 200, 0.07)),
+        rgba(11, 15, 25, 0.74);
+      box-shadow: inset 0 0 0 1px rgba(127, 140, 255, 0.08);
+    }
+
+    .flow-current-label {
+      color: var(--accent-2);
+      font-size: 10px;
+      font-weight: 850;
+    }
+
+    .flow-current-title {
+      color: #f2f5ff;
+      font-size: 15px;
+      font-weight: 850;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .flow-current-group {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .flow-current-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .flow-current-stats span {
+      padding: 5px 8px;
+      border-radius: 999px;
+      color: #cfd6ff;
+      background: rgba(255, 255, 255, 0.055);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 22px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 17px;
+      background: rgba(11, 15, 25, 0.78);
+      backdrop-filter: blur(22px);
+      box-shadow: var(--shadow);
+    }
+
+    .breadcrumb {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .breadcrumb strong {
+      overflow: hidden;
+      color: var(--text);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .control-button,
+    .select-control,
+    .toggle-control {
+      min-height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: rgba(255, 255, 255, 0.05);
+      transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+    }
+
+    .control-button {
+      min-width: 38px;
+      padding: 0 11px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .control-button:hover,
+    .toggle-control:hover { background: rgba(255, 255, 255, 0.09); }
+
+    .control-button.primary {
+      border-color: rgba(135, 147, 255, 0.5);
+      background: linear-gradient(145deg, rgba(116, 130, 255, 0.88), rgba(70, 178, 181, 0.72));
+      box-shadow: 0 8px 24px rgba(92, 111, 255, 0.18);
+    }
+
+    .select-control {
+      height: 36px;
+      padding: 0 28px 0 10px;
+      color: var(--text);
+      appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+        linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position:
+        calc(100% - 13px) 15px,
+        calc(100% - 9px) 15px;
+      background-size: 4px 4px, 4px 4px;
+      background-repeat: no-repeat;
+    }
+
+    .select-control option { color: #111827; }
+
+    .toggle-control {
+      height: 36px;
+      padding: 0 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .toggle-control input { accent-color: var(--accent); }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.55fr);
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .hero-card,
+    .status-card,
+    .flow-board,
+    .detail-panel,
+    .log-panel {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .hero-card {
+      position: relative;
+      overflow: hidden;
+      min-height: 224px;
+      padding: 26px;
+      border-radius: var(--radius-lg);
+    }
+
+    .hero-card::before {
+      content: "";
+      position: absolute;
+      inset: auto -10% -55% 30%;
+      height: 270px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(88, 105, 255, 0.26), transparent 68%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      color: #b9c1d8;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-2);
+      box-shadow: 0 0 16px rgba(75, 214, 200, 0.75);
+    }
+
+    .hero h2 {
+      max-width: 760px;
+      margin: 0;
+      font-size: clamp(25px, 3.2vw, 45px);
+      line-height: 1.08;
+      letter-spacing: -0.045em;
+    }
+
+    .hero-summary {
+      max-width: 790px;
+      margin: 16px 0 0;
+      color: #b3bdd2;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    .hero-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+
+    .meta-chip {
+      padding: 7px 10px;
+      border: 1px solid rgba(151, 166, 207, 0.15);
+      border-radius: 999px;
+      color: #c6cfe4;
+      background: rgba(255, 255, 255, 0.045);
+      font-size: 11px;
+    }
+
+    .status-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+      border-radius: var(--radius-lg);
+    }
+
+    .status-label {
+      color: var(--muted-2);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .current-step-title {
+      margin: 12px 0 8px;
+      font-size: 19px;
+      line-height: 1.35;
+      letter-spacing: -0.025em;
+    }
+
+    .current-step-desc {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .progress-shell { margin-top: 18px; }
+
+    .progress-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .progress-bar {
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      box-shadow: 0 0 22px rgba(105, 130, 255, 0.45);
+      transition: width 360ms cubic-bezier(.2, .8, .2, 1);
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .flow-board {
+      min-width: 0;
+      overflow: hidden;
+      border-radius: var(--radius-lg);
+    }
+
+    .board-head,
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .board-head h3,
+    .panel-head h3 {
+      margin: 0;
+      font-size: 13px;
+      letter-spacing: -0.015em;
+    }
+
+    .board-head p,
+    .panel-head p {
+      margin: 4px 0 0;
+      color: var(--muted-2);
+      font-size: 10px;
+    }
+
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted-2);
+      font-size: 9px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+    }
+
+    .legend-dot.done { background: var(--success); }
+    .legend-dot.active { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+    .legend-dot.pending { background: #555e74; }
+
+    .board-scroll {
+      overflow: auto;
+      padding: 0 0 12px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(160, 172, 205, 0.28) transparent;
+    }
+
+    .lane-heads {
+      min-width: 980px;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(146px, 1fr));
+      border-bottom: 1px solid var(--border);
+      background:
+        linear-gradient(180deg, rgba(24, 32, 51, 0.94), rgba(14, 19, 31, 0.92));
+      box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.035);
+    }
+
+    .lane-head {
+      --lane-color: var(--accent);
+      position: relative;
+      padding: 13px 10px;
+      border-right: 1px solid rgba(151, 166, 207, 0.18);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--lane-color) 16%, transparent), transparent 74%),
+        radial-gradient(circle at 50% 0, color-mix(in srgb, var(--lane-color) 18%, transparent), transparent 62%);
+      text-align: center;
+    }
+
+    .lane-head:nth-child(1) { --lane-color: #7f8cff; }
+    .lane-head:nth-child(2) { --lane-color: #69b7ff; }
+    .lane-head:nth-child(3) { --lane-color: #4bd6c8; }
+    .lane-head:nth-child(4) { --lane-color: #7ee2a8; }
+    .lane-head:nth-child(5) { --lane-color: #ffbf69; }
+    .lane-head:nth-child(6) { --lane-color: #ff8db3; }
+
+    .lane-head:last-child { border-right: 0; }
+
+    .lane-head::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 10px;
+      right: 10px;
+      height: 3px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, transparent, var(--lane-color), transparent);
+      box-shadow: 0 0 16px color-mix(in srgb, var(--lane-color) 48%, transparent);
+    }
+
+    .lane-head strong {
+      display: block;
+      color: #f7f9ff;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      text-shadow: 0 0 16px color-mix(in srgb, var(--lane-color) 30%, transparent);
+    }
+
+    .lane-head span {
+      display: block;
+      margin-top: 3px;
+      color: #9faac2;
+      font-size: 8px;
+    }
+
+    .diagram-wrap {
+      position: relative;
+      min-width: 980px;
+      min-height: 480px;
+      padding: 16px 12px 28px;
+      background:
+        linear-gradient(
+          to right,
+          rgba(127, 140, 255, 0.078) 0,
+          rgba(127, 140, 255, 0.078) 16.666%,
+          rgba(105, 183, 255, 0.058) 16.666%,
+          rgba(105, 183, 255, 0.058) 33.333%,
+          rgba(75, 214, 200, 0.056) 33.333%,
+          rgba(75, 214, 200, 0.056) 50%,
+          rgba(126, 226, 168, 0.052) 50%,
+          rgba(126, 226, 168, 0.052) 66.666%,
+          rgba(255, 191, 105, 0.05) 66.666%,
+          rgba(255, 191, 105, 0.05) 83.333%,
+          rgba(255, 141, 179, 0.052) 83.333%,
+          rgba(255, 141, 179, 0.052) 100%
+        ),
+        repeating-linear-gradient(
+          to right,
+          transparent 0,
+          transparent calc(16.666% - 1px),
+          rgba(151, 166, 207, 0.14) calc(16.666% - 1px),
+          rgba(151, 166, 207, 0.14) 16.666%
+        );
+    }
+
+    .diagram-grid {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(146px, 1fr));
+      grid-auto-rows: minmax(94px, auto);
+      gap: 12px 12px;
+    }
+
+    .edge-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 6;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .edge {
+      fill: none;
+      stroke: rgba(126, 226, 168, 0.42);
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: stroke 240ms ease, opacity 240ms ease, filter 240ms ease;
+    }
+
+    .edge.done { stroke: rgba(126, 226, 168, 0.58); }
+
+    .edge.active {
+      stroke: url(#activeGradient);
+      stroke-width: 4;
+      filter:
+        drop-shadow(0 0 6px rgba(111, 128, 255, 0.72))
+        drop-shadow(0 0 12px rgba(91, 213, 255, 0.36));
+    }
+
+    .edge.cross-edge {
+      stroke: rgba(127, 140, 255, 0.56);
+      stroke-dasharray: 8 6;
+    }
+
+    .edge.cross-edge.incoming {
+      stroke: rgba(105, 183, 255, 0.64);
+    }
+
+    .edge.cross-edge.outgoing {
+      stroke: rgba(255, 191, 105, 0.66);
+    }
+
+    .step-node {
+      position: relative;
+      align-self: center;
+      min-width: 0;
+      min-height: 74px;
+      padding: 12px 12px 11px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(22, 29, 45, 0.84);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+      transition:
+        transform 260ms cubic-bezier(.2, .8, .2, 1),
+        border-color 260ms ease,
+        background 260ms ease,
+        opacity 260ms ease,
+        filter 260ms ease;
+    }
+
+    .step-node.context-node {
+      min-height: 68px;
+      border-style: dashed;
+      background: rgba(16, 22, 36, 0.78);
+    }
+
+    .step-node.incoming-node {
+      border-color: rgba(105, 183, 255, 0.36);
+    }
+
+    .step-node.outgoing-node {
+      border-color: rgba(255, 191, 105, 0.4);
+    }
+
+    .step-node.current-node {
+      border-color: rgba(151, 166, 207, 0.24);
+    }
+
+    .step-node.symbol-node {
+      border-radius: 10px;
+      border-color: rgba(75, 214, 200, 0.32);
+      background: rgba(18, 31, 42, 0.82);
+    }
+
+    .step-node.symbol-node.target-symbol {
+      border-color: rgba(75, 214, 200, 0.8);
+      box-shadow:
+        0 0 0 1px rgba(75, 214, 200, 0.22),
+        0 16px 38px rgba(0, 0, 0, 0.3);
+    }
+
+    .node-flow {
+      display: block;
+      min-width: 0;
+      margin-left: 7px;
+      overflow: hidden;
+      color: var(--muted-2);
+      font-size: 8px;
+      font-weight: 750;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .step-node.pending {
+      opacity: 0.44;
+      filter: saturate(0.65);
+    }
+
+    .step-node.done {
+      border-color: rgba(126, 226, 168, 0.28);
+      background: linear-gradient(145deg, rgba(31, 55, 52, 0.79), rgba(23, 31, 44, 0.84));
+    }
+
+    .step-node.active {
+      z-index: 5;
+      transform: translateY(-3px) scale(1.025);
+      border-color: rgba(140, 151, 255, 0.78);
+      background: linear-gradient(145deg, rgba(50, 60, 120, 0.93), rgba(23, 49, 58, 0.9));
+      box-shadow:
+        0 18px 42px rgba(0, 0, 0, 0.34),
+        0 0 0 1px rgba(140, 151, 255, 0.2),
+        0 0 34px rgba(105, 125, 255, 0.18);
+    }
+
+    .node-topline {
+      display: flex;
+      align-items: center;
+      margin-bottom: 7px;
+    }
+
+    .node-seq {
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.06);
+      font-size: 9px;
+      font-weight: 850;
+    }
+
+    .step-node.active .node-seq {
+      color: #fff;
+      background: linear-gradient(145deg, var(--accent), var(--accent-2));
+    }
+
+    .node-title {
+      overflow: hidden;
+      color: #e9edfa;
+      font-size: 11px;
+      font-weight: 760;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+    }
+
+    .node-code {
+      overflow: hidden;
+      margin-top: 5px;
+      color: #a7b4d1;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 8px;
+      line-height: 1.35;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .symbol-search-section {
+      margin: 10px 0 16px;
+      padding: 10px;
+      border: 1px solid rgba(151, 166, 207, 0.14);
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .symbol-search-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      color: #dce4f7;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .symbol-search-item {
+      width: 100%;
+      display: grid;
+      gap: 3px;
+      margin-top: 6px;
+      padding: 9px;
+      border: 1px solid rgba(151, 166, 207, 0.12);
+      color: inherit;
+      background: rgba(10, 14, 24, 0.5);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .symbol-search-item:hover {
+      border-color: rgba(75, 214, 200, 0.4);
+      background: rgba(75, 214, 200, 0.08);
+    }
+
+    .symbol-search-item strong {
+      overflow: hidden;
+      color: #edf4ff;
+      font-size: 10px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .symbol-search-item span,
+    .symbol-search-item code {
+      overflow: hidden;
+      color: var(--muted-2);
+      font-size: 8px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .side-stack {
+      display: grid;
+      gap: 18px;
+      position: sticky;
+      top: 88px;
+    }
+
+    .detail-panel,
+    .log-panel {
+      overflow: hidden;
+      border-radius: var(--radius-lg);
+    }
+
+    .detail-body { padding: 16px 18px 18px; }
+
+    .detail-section + .detail-section { margin-top: 16px; }
+
+    .detail-kicker {
+      margin-bottom: 5px;
+      color: var(--muted-2);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .detail-value {
+      color: #dce3f5;
+      font-size: 11px;
+      line-height: 1.7;
+      word-break: break-word;
+    }
+
+    .detail-chip-list,
+    .detail-edge-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .detail-chip {
+      max-width: 100%;
+      padding: 5px 8px;
+      border: 1px solid rgba(151, 166, 207, 0.14);
+      border-radius: 999px;
+      color: #cdd6ef;
+      background: rgba(255, 255, 255, 0.045);
+      font-size: 9px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    .detail-edge-list {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    .detail-edge-card {
+      display: grid;
+      gap: 5px;
+      padding: 8px;
+      border: 1px solid rgba(127, 140, 255, 0.18);
+      border-radius: 8px;
+      background: rgba(127, 140, 255, 0.06);
+    }
+
+    .detail-edge-card strong,
+    .detail-edge-card span,
+    .detail-edge-card code {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .detail-edge-card strong {
+      color: #eef2ff;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .detail-edge-card span {
+      color: var(--muted);
+      font-size: 9px;
+      line-height: 1.45;
+    }
+
+    .detail-edge-card code {
+      color: #9fb3da;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 8px;
+      line-height: 1.45;
+    }
+
+    .source-path {
+      display: block;
+      padding: 9px 10px;
+      border: 1px solid rgba(151, 166, 207, 0.13);
+      border-radius: 10px;
+      color: #b8c4e0;
+      background: rgba(0, 0, 0, 0.16);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 9px;
+      line-height: 1.5;
+      word-break: break-all;
+    }
+
+    .log-body {
+      max-height: 278px;
+      overflow: auto;
+      padding: 11px 13px 14px;
+      background: rgba(1, 4, 9, 0.34);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(160, 172, 205, 0.28) transparent;
+    }
+
+    .log-entry:last-child { border-bottom: 0; }
+    .log-time { color: #606b82; }
+    .log-lane { color: var(--accent-2); }
+    .log-entry.current { color: #e5eaff; background: rgba(127, 140, 255, 0.07); }
+
+    .log-entry {
+      border: 0;
+      text-align: left;
+      width: 100%;
+      appearance: none;
+      cursor: pointer;
+      display: grid;
+      grid-template-columns: 48px 54px minmax(0, 1fr);
+      gap: 8px;
+      padding: 7px 5px;
+      border-bottom: 1px solid rgba(151, 166, 207, 0.08);
+      color: #a8b3cc;
+      font-size: 8px;
+      line-height: 1.55;
+      background: transparent;
+    }
+
+    .log-entry:hover { background: rgba(255, 255, 255, 0.032); }
+
+    .log-entry.current { color: #e5eaff; background: rgba(127, 140, 255, 0.07); }
+
+    .empty-state {
+      padding: 36px 20px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 12px;
+    }
+
+    .footer-note {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      margin-top: 16px;
+      padding: 0 4px 10px;
+      color: var(--muted-2);
+      font-size: 9px;
+      line-height: 1.6;
+    }
+
+    .mobile-menu-button { display: none; }
+
+    @media (max-width: 1180px) {
+      :root { --sidebar-width: 310px; }
+      .content-grid { grid-template-columns: minmax(0, 1fr); }
+      .flow-relation-layout { grid-template-columns: 1fr; }
+      .flow-current-card { order: -1; }
+      .side-stack {
+        position: static;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 900px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: min(86vw, 330px);
+        transform: translateX(-105%);
+        transition: transform 220ms ease;
+        box-shadow: 20px 0 60px rgba(0,0,0,.5);
+      }
+      .sidebar.open { transform: translateX(0); }
+      .mobile-menu-button { display: inline-flex; }
+      .main { padding: 14px; }
+      .topbar { top: 8px; }
+      .hero { grid-template-columns: 1fr; }
+      .hero-card { min-height: auto; }
+      .side-stack { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 620px) {
+      .topbar { align-items: flex-start; }
+      .breadcrumb { padding-top: 7px; }
+      .controls { gap: 6px; }
+      .control-button span.label { display: none; }
+      .toggle-control span { display: none; }
+      .hero-card, .status-card { padding: 19px; }
+      .flow-relation-map { padding: 12px; }
+      .hero h2 { font-size: 28px; }
+      .hero-summary { font-size: 12px; }
+      .legend { display: none; }
+      .footer-note { flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Business flow selection">
+      <div class="brand">
+        <div class="brand-mark">MP</div>
+        <div>
+          <h1>MindPhase Lifecycle</h1>
+          <p>Interactive map for business logic execution flows.</p>
+        </div>
+      </div>
+
+      <div class="search-wrap">
+        <input id="flowSearch" type="search" placeholder="Search flows, commands, files" autocomplete="off" />
+      </div>
+      <div class="relation-toolbar">
+        <div>
+          <strong>Flow Links</strong>
+          <span>Show direct links for the selected flow</span>
+        </div>
+        <button class="relation-toggle active" id="relationToggle" type="button">ON</button>
+      </div>
+      <div class="relation-legend" aria-label="Flow relation types">
+        <span><i class="relation-swatch call"></i>Call</span>
+        <span><i class="relation-swatch event"></i>Event</span>
+        <span><i class="relation-swatch sync"></i>Sync</span>
+        <span><i class="relation-swatch cleanup"></i>Cleanup</span>
+      </div>
+      <div class="flow-list" id="flowList"></div>
+    </aside>
+
+    <main class="app-main">
+      <header class="topbar">
+        <div class="breadcrumb">
+          <button class="control-button mobile-menu-button" id="menuButton" aria-label="Open flow list">Menu</button>
+          <span id="groupCrumb">App Lifecycle</span>
+          <span>/</span>
+          <strong id="flowCrumb">Rust / Tauri Bootstrap</strong>
+        </div>
+        <div class="controls" aria-label="Animation controls">
+          <button class="control-button" id="prevButton" title="Previous step"><span class="label">Prev</span></button>
+          <button class="control-button primary" id="playButton" title="Play or pause"><span class="label">Play</span></button>
+          <button class="control-button" id="nextButton" title="Next step"><span class="label">Next</span></button>
+          <select class="select-control" id="speedSelect" title="Playback speed">
+            <option value="2200">0.6x</option>
+            <option value="1500" selected>1x</option>
+            <option value="900">1.6x</option>
+            <option value="520">2.6x</option>
+          </select>
+          <label class="toggle-control" title="Move to next flow after the final step">
+            <input id="loopToggle" type="checkbox" checked />
+            <span>Loop all</span>
+          </label>
+        </div>
+      </header>
+
+      <section class="hero">
+        <article class="hero-card">
+          <div class="eyebrow" id="flowGroup">App Lifecycle</div>
+          <h2 id="flowTitle">Rust / Tauri Bootstrap</h2>
+          <p class="hero-summary" id="flowSummary"></p>
+          <div class="hero-meta" id="heroMeta"></div>
+        </article>
+        <article class="status-card" aria-live="polite">
+          <div>
+            <div class="status-label">Current Step</div>
+            <div class="current-step-title" id="currentStepTitle"></div>
+            <div class="current-step-desc" id="currentStepDesc"></div>
+          </div>
+          <div class="progress-shell">
+            <div class="progress-meta">
+              <span id="progressLabel">1 / 1</span>
+              <span id="progressPercent">100%</span>
+            </div>
+            <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="flow-board">
+          <div class="board-head">
+            <div>
+              <h3>Call Relationship Animation</h3>
+              <p>Shows ownership lanes, handoffs, and execution order across the selected workflow.</p>
+            </div>
+            <div class="legend" aria-label="Step state legend">
+              <span class="legend-item"><i class="legend-dot done"></i>Done</span>
+              <span class="legend-item"><i class="legend-dot active"></i>Active</span>
+              <span class="legend-item"><i class="legend-dot pending"></i>Pending</span>
+            </div>
+          </div>
+          <div class="flow-relation-map" id="flowRelationMap" aria-live="polite"></div>
+          <div class="board-scroll" id="boardScroll">
+            <div class="lane-heads" id="laneHeads"></div>
+            <div class="diagram-wrap" id="diagramWrap">
+              <svg class="edge-layer" id="edgeLayer" aria-hidden="true">
+                <defs>
+                  <linearGradient id="activeGradient" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stop-color="#7f8cff" />
+                    <stop offset="100%" stop-color="#4bd6c8" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div class="diagram-grid" id="diagramGrid"></div>
+            </div>
+          </div>
+        </article>
+
+        <aside class="side-stack">
+          <article class="detail-panel">
+            <div class="panel-head">
+              <div>
+                <h3>Active Step Detail</h3>
+                <p>Role, call site, source path, and function I/O for the selected step.</p>
+              </div>
+            </div>
+            <div class="detail-body">
+              <div class="detail-section">
+                <div class="detail-kicker">Role</div>
+                <div class="detail-value" id="detailRole"></div>
+              </div>
+              <div class="detail-section">
+                <div class="detail-kicker">Call / Event</div>
+                <div class="detail-value" id="detailCall"></div>
+              </div>
+              <div class="detail-section">
+                <div class="detail-kicker">Source Path</div>
+                <code class="source-path" id="detailSource"></code>
+              </div>
+              <div class="detail-section">
+                <div class="detail-kicker">Function Inputs</div>
+                <div class="detail-chip-list" id="detailInputs"></div>
+              </div>
+              <div class="detail-section">
+                <div class="detail-kicker">Function Outputs</div>
+                <div class="detail-chip-list" id="detailOutputs"></div>
+              </div>
+              <div class="detail-section">
+                <div class="detail-kicker">Function Edges</div>
+                <div class="detail-edge-list" id="detailEdges"></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="log-panel">
+            <div class="panel-head">
+              <div>
+                <h3>Execution Log</h3>
+                <p>Click any log row to jump to that step.</p>
+              </div>
+              <button class="control-button" id="resetButton" title="Return to first step">Reset</button>
+            </div>
+            <div class="log-body" id="logBody"></div>
+          </article>
+        </aside>
+      </section>
+
+      <footer class="footer-note">
+        <span>Keyboard: Space play/pause, arrows move step, Home first, End last.</span>
+        <span>Single HTML file with flow links and clickable execution log.</span>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    const LANES = [
+      { id: 'entry', label: 'Trigger / UI', sub: 'User gestures and shell events' },
+      { id: 'page', label: 'Page Runtime', sub: 'Controllers, actions, and route runtime' },
+      { id: 'feature', label: 'Application', sub: 'Feature facades and domain services' },
+      { id: 'ipc', label: 'Service / IPC', sub: 'Clients, DTOs, and command transport' },
+      { id: 'rust', label: 'Rust Backend', sub: 'Tauri commands and app state' },
+      { id: 'infra', label: 'Infrastructure', sub: 'Database, file system, indexer, renderer' },
+    ];
+
+    const FLOW_SPECS = [
+      { id: 'tauri-bootstrap', group: 'App Lifecycle', title: 'Rust / Tauri Bootstrap', summary: 'The desktop process registers commands, prepares state, runs migrations, starts indexing, and enters the event loop.', trigger: 'Desktop process starts', result: 'Backend IPC runtime is ready', tags: ['startup', 'tauri', 'backend'], refs: [
+        ['entry', 'Process entry', 'run()', 'src-tauri/src/lib.rs'],
+        ['rust', 'Register command handler', 'mindphase_command_registry', 'src-tauri/src/app/command_registry.rs'],
+        ['rust', 'Build Tauri app', 'run_with_handler', 'src-tauri/src/app/bootstrap.rs'],
+        ['infra', 'Initialize database and index', 'reindex_workspace', 'src-tauri/src/app/state.rs'],
+        ['rust', 'Start event loop', 'run', 'src-tauri/src/app/bootstrap.rs'],
+      ] },
+      { id: 'frontend-composition', group: 'App Lifecycle', title: 'Frontend Application Composition', summary: 'The page composition root wires application facades, feature services, clients, and command transport.', trigger: 'Page services are created', result: 'Page runtime receives application service functions', tags: ['composition', 'facade', 'transport'], refs: [
+        ['page', 'Create route services', 'createPageRouteServices', 'src/lib/page/page-route-runtime-wiring.ts'],
+        ['feature', 'Create app facade', 'createMindPhaseApp', 'src/lib/app/mindphase-app.ts'],
+        ['ipc', 'Create command transport', 'TauriCommandTransport', 'src/lib/services/TauriCommandTransport.ts'],
+        ['feature', 'Wire workspace feature', 'WorkspaceFeature', 'src/lib/features/workspace/WorkspaceFeature.ts'],
+        ['feature', 'Return page service API', 'createPageRouteServices', 'src/lib/page/page-route-runtime-wiring.ts'],
+      ] },
+      { id: 'page-mount', group: 'App Lifecycle', title: 'Page Mount & Durable State Load', summary: 'Mounted route controllers restore durable state and schedule initial workspace and engine loading.', trigger: 'PageRoute component mounts', result: 'Controllers and durable UI state are ready', tags: ['onMount', 'durable state', 'controllers'], refs: [
+        ['entry', 'Register mounted lifecycle', 'registerPageMountedLifecycle', 'src/lib/page/page-route-lifecycle.svelte.ts'],
+        ['page', 'Create lifecycle runtime', 'createPageLifecyclePageRuntime', 'src/lib/page/page-lifecycle.ts'],
+        ['page', 'Run page lifecycle', 'runPageLifecycle', 'src/lib/page/page-lifecycle.ts'],
+        ['feature', 'Load theme and zoom', 'load', 'src/lib/page/controllers/app-theme-controller.svelte.ts'],
+        ['page', 'Start engine init', 'runPageEngineInit', 'src/lib/page/page-engine-init.ts'],
+      ] },
+      { id: 'engine-init', group: 'App Lifecycle', title: 'Renderer & Graph Engine Initialization', summary: 'The page creates a render backend, camera, grid renderer, and GraphRuntime before loading graph data.', trigger: 'runPageEngineInit()', result: 'Interactive graph engine is ready', tags: ['renderer', 'graph', 'canvas'], refs: [
+        ['page', 'Create renderer', 'createRenderer', 'src/lib/engine/render/BackendFactory.ts'],
+        ['page', 'Prepare engine resources', 'runPageEngineInit', 'src/lib/page/page-engine-init.ts'],
+        ['feature', 'Create GraphRuntime', 'GraphRuntime', 'src/lib/graph/core/GraphRuntime.ts'],
+        ['ipc', 'Request graph snapshot', 'loadSnapshot', 'src/lib/graph/data/DocumentGraphRepository.ts'],
+        ['page', 'Bind canvas events', 'registerCanvasEngineEvents', 'src/lib/page/page-engine-init.ts'],
+      ] },
+      { id: 'render-loop', group: 'App Lifecycle', title: 'Graph Render Loop', summary: 'Render invalidation schedules frames, updates camera and graph runtime state, then draws GPU and DOM overlays.', trigger: 'requestRender(reason)', result: 'Canvas and overlay are refreshed', tags: ['requestAnimationFrame', 'rendering', 'hud'], refs: [
+        ['entry', 'Request render', 'requestRender', 'src/lib/page/page-render-scheduler.ts'],
+        ['page', 'Deduplicate frame', 'PageRenderScheduler', 'src/lib/page/page-render-scheduler.ts'],
+        ['page', 'Render frame', 'renderFrame', 'src/lib/page/page-render-scheduler.ts'],
+        ['feature', 'Update graph runtime', 'update', 'src/lib/graph/core/GraphRuntime.ts'],
+        ['infra', 'Draw backend frame', 'draw', 'src/lib/graph/core/GraphRuntime.ts'],
+      ] },
+      { id: 'workspace-registry', group: 'Workspace', title: 'Workspace Registry Switch & Remove', summary: 'Workspace settings list, add, activate, and remove registered workspaces, then refresh dependent views.', trigger: 'Workspace settings action', result: 'Active workspace context is updated', tags: ['workspace', 'registry', 'settings'], refs: [
+        ['entry', 'Start registry action', 'workspaceSettingsActions', 'src/lib/page/workspace-settings-actions.ts'],
+        ['feature', 'Call workspace registry', 'WorkspaceFeature', 'src/lib/features/workspace/WorkspaceFeature.ts'],
+        ['ipc', 'Invoke workspace client', 'WorkspaceClient', 'src/lib/services/workspace-client.ts'],
+        ['rust', 'Handle registry command', 'workspace_registry_service', 'src-tauri/src/application/workspace_registry_service.rs'],
+        ['page', 'Reload workspace view', 'reloadWorkspaceTreeAndGraph', 'src/lib/page/workspace-settings-actions.ts'],
+      ] },
+      { id: 'workspace-tree-load', group: 'Workspace', title: 'Workspace Tree Load & Graph Sync', summary: 'The active workspace tree is loaded from the backend and synchronized with graph and editor state.', trigger: 'Workspace tree loader runs', result: 'Tree and graph reflect the active workspace', tags: ['workspace', 'tree', 'graph'], refs: [
+        ['page', 'Request workspace tree', 'loadWorkspaceTree', 'src/lib/page/page-route-lifecycle.svelte.ts'],
+        ['feature', 'Call workspace facade', 'WorkspaceFeature', 'src/lib/features/workspace/WorkspaceFeature.ts'],
+        ['ipc', 'Invoke entries client', 'WorkspaceClient', 'src/lib/services/workspace-client.ts'],
+        ['rust', 'Read workspace entries', 'workspace_query_service', 'src-tauri/src/application/workspace_query_service.rs'],
+        ['page', 'Apply tree state', 'workspacePanel', 'src/lib/page/workspace-management-runtime.ts'],
+      ] },
+      { id: 'document-open', group: 'Document & Editor', title: 'Document Open', summary: 'Opening a row or graph node reads document content and creates or activates an editor session.', trigger: 'Workspace item open action', result: 'Selected document is visible in the editor', tags: ['document', 'editor', 'open'], refs: [
+        ['entry', 'Receive open action', 'handleWorkspaceRowClick', 'src/lib/page/workspace-interaction-runtime.ts'],
+        ['feature', 'Read document service', 'DocumentFeature', 'src/lib/features/documents/DocumentFeature.ts'],
+        ['ipc', 'Invoke read command', 'readDocument', 'src/lib/services/document-service.ts'],
+        ['rust', 'Read document backend', 'read_document', 'src-tauri/src/commands/index_commands.rs'],
+        ['page', 'Open editor session', 'openWorkspaceFile', 'src/lib/page/workspace-file-open-actions.ts'],
+      ] },
+      { id: 'document-save', group: 'Document & Editor', title: 'Editor Draft Save', summary: 'Saving an editor draft validates hashes, writes content, updates editor dirty state, and triggers index refresh.', trigger: 'Save command or dirty-close save', result: 'File contents and editor hash are current', tags: ['save', 'draft', 'reindex'], refs: [
+        ['entry', 'Request draft save', 'saveEditorDraft', 'src/lib/page/editor-draft-save-actions.ts'],
+        ['page', 'Prepare save payload', 'saveEditorDraft', 'src/lib/page/editor-draft-save-actions.ts'],
+        ['feature', 'Call document save', 'DocumentFeature', 'src/lib/features/documents/DocumentFeature.ts'],
+        ['ipc', 'Invoke save command', 'saveDocument', 'src/lib/services/document-service.ts'],
+        ['rust', 'Persist document', 'save_document', 'src-tauri/src/commands/index_commands.rs'],
+      ] },
+      { id: 'document-media-bytes', group: 'Document & Editor', title: 'Document Bytes & Media Resolve', summary: 'Document media helpers resolve workspace-relative media references and read binary document bytes.', trigger: 'Preview or attachment request', result: 'Binary content or resolved media path is returned', tags: ['bytes', 'media', 'preview'], refs: [
+        ['entry', 'Request media content', 'resolveDocumentMedia', 'src/lib/page/page-route-runtime-wiring.ts'],
+        ['feature', 'Use document service', 'MarkdownDocumentService', 'src/lib/features/documents/MarkdownDocumentService.ts'],
+        ['ipc', 'Invoke media command', 'resolveDocumentMedia', 'src/lib/services/document-service.ts'],
+        ['rust', 'Resolve media path', 'document_command_service', 'src-tauri/src/application/document_command_service.rs'],
+        ['infra', 'Read file bytes', 'read', 'src-tauri/src/application/document_text_service.rs'],
+      ] },
+      { id: 'editor-close', group: 'Document & Editor', title: 'Dirty Editor Close', summary: 'Closing an editor resolves dirty state, optional save, session removal, graph selection, and occupancy cleanup.', trigger: 'Close editor action', result: 'Editor session is closed or blocked by save failure', tags: ['close', 'dirty', 'session'], refs: [
+        ['entry', 'Request close', 'closeEditor', 'src/lib/page/editor-close-actions.ts'],
+        ['page', 'Check dirty editor', 'editorSession', 'src/lib/page/editor-close-actions.ts'],
+        ['page', 'Optionally save draft', 'saveEditorDraft', 'src/lib/page/editor-draft-save-actions.ts'],
+        ['page', 'Remove editor session', 'closeEditor', 'src/lib/page/editor-close-actions.ts'],
+        ['feature', 'Sync graph selection', 'setGraphSelectedNodeId', 'src/lib/page/controllers/graph-scene-controller.svelte.ts'],
+      ] },
+      { id: 'editor-session', group: 'Document & Editor', title: 'Editor Session Restore & Persist', summary: 'Editor session persistence stores open tabs and restores them after graph engine initialization.', trigger: 'Engine init or session state change', result: 'Open editor layout survives remount', tags: ['session', 'restore', 'persist'], refs: [
+        ['page', 'Restore session state', 'restoreEditorSessionState', 'src/lib/page/full-editor-runtime.ts'],
+        ['page', 'Open restored document', 'openWorkspaceFile', 'src/lib/page/workspace-file-open-actions.ts'],
+        ['page', 'Persist session state', 'persistEditorSessionState', 'src/lib/page/full-editor-runtime-view-session-actions.ts'],
+        ['feature', 'Track editor occupancy', 'syncEditorOccupanciesWithRuntime', 'src/lib/page/page-render-scheduler.ts'],
+        ['page', 'Update active tab', 'editorSession', 'src/lib/page/full-editor-runtime.ts'],
+      ] },
+      { id: 'workspace-create-file', group: 'Workspace', title: 'Document Create', summary: 'Creating a document plans a path, invokes backend file creation, reloads tree and graph, and opens the new document.', trigger: 'Create document action', result: 'New document appears in workspace and editor', tags: ['create', 'document', 'workspace'], refs: [
+        ['entry', 'Request document creation', 'createWorkspaceDocument', 'src/lib/page/workspace-create-actions.ts'],
+        ['page', 'Plan file name', 'createDocumentPlan', 'src/lib/page/workspace-management-runtime.ts'],
+        ['feature', 'Call entries facade', 'WorkspaceFeature', 'src/lib/features/workspace/WorkspaceFeature.ts'],
+        ['ipc', 'Invoke create command', 'createWorkspaceFile', 'src/lib/services/workspace-client.ts'],
+        ['rust', 'Create workspace file', 'create_workspace_file', 'src-tauri/src/commands/index_commands.rs'],
+      ] },
+      { id: 'workspace-create-folder', group: 'Workspace', title: 'Folder Create & Inline Rename', summary: 'Creating a folder reserves a target path, writes the folder, then activates inline rename state.', trigger: 'Create folder action', result: 'New folder is visible and ready for rename', tags: ['folder', 'create', 'rename'], refs: [
+        ['entry', 'Request folder creation', 'createWorkspaceFolder', 'src/lib/page/workspace-create-actions.ts'],
+        ['page', 'Plan folder path', 'createFolderPlan', 'src/lib/page/workspace-management-runtime.ts'],
+        ['ipc', 'Invoke folder command', 'createWorkspaceFolder', 'src/lib/services/workspace-client.ts'],
+        ['rust', 'Create folder backend', 'create_workspace_folder', 'src-tauri/src/commands/index_commands.rs'],
+        ['page', 'Focus rename input', 'settleGraphPresentation', 'src/lib/page/workspace-create-actions.ts'],
+      ] },
+      { id: 'workspace-move-rename', group: 'Workspace', title: 'File Move & Rename', summary: 'Move and rename workflows validate destination paths, call backend mutation, reload views, and reopen moved documents.', trigger: 'Drag drop or inline rename commit', result: 'Tree, graph, and editor point at the new path', tags: ['move', 'rename', 'filesystem'], refs: [
+        ['entry', 'Start move or rename', 'finishInternalMoveDrop', 'src/lib/page/workspace-interaction-runtime.ts'],
+        ['page', 'Validate move plan', 'renamePlan', 'src/lib/page/workspace-management-runtime.ts'],
+        ['ipc', 'Invoke move command', 'moveEntry', 'src/lib/services/workspace-client.ts'],
+        ['rust', 'Move workspace entry', 'move_workspace_entry', 'src-tauri/src/commands/index_commands.rs'],
+        ['page', 'Reload and reopen', 'reloadWorkspaceTreeAndGraph', 'src/lib/page/workspace-move-actions.ts'],
+      ] },
+      { id: 'workspace-external-copy', group: 'Workspace', title: 'External File Drag & Drop Copy', summary: 'External dropped files are copied into the target workspace folder and indexed into tree and graph views.', trigger: 'Operating system drag/drop event', result: 'Copied entries appear in workspace', tags: ['drag drop', 'copy', 'external'], refs: [
+        ['entry', 'Receive external drop', 'handleWorkspaceExternalDragDrop', 'src/lib/page/workspace-external-copy-actions.ts'],
+        ['page', 'Resolve drop target', 'handleWorkspaceExternalDragDrop', 'src/lib/page/workspace-external-copy-actions.ts'],
+        ['feature', 'Call copy facade', 'WorkspaceFeature', 'src/lib/features/workspace/WorkspaceFeature.ts'],
+        ['ipc', 'Invoke copy command', 'copyExternalEntries', 'src/lib/services/workspace-client.ts'],
+        ['rust', 'Copy external entries', 'copy_external_workspace_entries', 'src-tauri/src/commands/index_commands.rs'],
+      ] },
+      { id: 'workspace-trash', group: 'Workspace', title: 'Workspace Entry Move To Trash', summary: 'Trash actions remove selected files or folders, close affected editors, and refresh workspace projections.', trigger: 'Delete or trash command', result: 'Entry is removed from active workspace view', tags: ['trash', 'delete', 'cleanup'], refs: [
+        ['entry', 'Request trash action', 'trashWorkspaceEntry', 'src/lib/page/workspace-trash-actions.ts'],
+        ['page', 'Find affected editors', 'editorSession', 'src/lib/page/workspace-trash-actions.ts'],
+        ['ipc', 'Invoke trash command', 'trashEntry', 'src/lib/services/workspace-client.ts'],
+        ['rust', 'Trash workspace entry', 'trash_workspace_entry', 'src-tauri/src/commands/index_commands.rs'],
+        ['page', 'Reload workspace view', 'reloadWorkspaceTreeAndGraph', 'src/lib/page/workspace-trash-actions.ts'],
+      ] },
+      { id: 'search', group: 'Search & Index', title: 'Document Body Tag Backlink Search', summary: 'Search routes choose document, body, tag, or backlink search and return indexed results to the UI.', trigger: 'Search input or command palette', result: 'Search results are returned for the active workspace', tags: ['search', 'tags', 'backlinks'], refs: [
+        ['entry', 'Receive search query', 'WorkspaceSearchPanel', 'src/lib/page/components/WorkspaceSearchPanel.svelte'],
+        ['page', 'Build search params', 'SearchParams', 'src/lib/types/search.ts'],
+        ['feature', 'Call search client', 'SearchClient', 'src/lib/services/search-client.ts'],
+        ['ipc', 'Invoke search command', 'search', 'src/lib/services/search-client.ts'],
+        ['rust', 'Run backend search', 'ripgrep_search', 'src-tauri/src/indexer/ripgrep_search.rs'],
+      ] },
+      { id: 'reindex', group: 'Search & Index', title: 'Workspace Full & Changed Path Reindex', summary: 'Full and changed-path reindexing refreshes search, graph sources, and emits workspace-indexed events.', trigger: 'Startup, manual request, or file watcher event', result: 'Index and graph source data are current', tags: ['index', 'watcher', 'graph'], refs: [
+        ['entry', 'Trigger reindex', 'reindexWorkspace', 'src/lib/page/page-route-runtime-wiring.ts'],
+        ['ipc', 'Invoke reindex command', 'IndexingClient', 'src/lib/services/indexing-client.ts'],
+        ['rust', 'Run index service', 'reindex_workspace', 'src-tauri/src/application/index_service.rs'],
+        ['infra', 'Scan files', 'reindex_workspace', 'src-tauri/src/indexer/reindex.rs'],
+        ['page', 'Handle indexed event', 'handleWorkspaceIndexed', 'src/lib/page/page-engine-init.ts'],
+      ] },
+      { id: 'graph-snapshot', group: 'Graph', title: 'Graph Snapshot Load & Reload', summary: 'GraphRuntime loads or reloads backend snapshots and applies them to simulation and overlay state.', trigger: 'Graph init or workspace-indexed event', result: 'Runtime graph nodes and links are current', tags: ['snapshot', 'runtime', 'reload'], refs: [
+        ['page', 'Request snapshot reload', 'reloadGraphFromFilesystem', 'src/lib/page/workspace-settings-actions.ts'],
+        ['feature', 'Load repository snapshot', 'loadSnapshot', 'src/lib/graph/data/DocumentGraphRepository.ts'],
+        ['ipc', 'Invoke graph command', 'getDocumentGraph', 'src/lib/graph/data/DocumentGraphRepository.ts'],
+        ['rust', 'Build graph DTO', 'get_document_graph', 'src-tauri/src/commands/index_commands.rs'],
+        ['feature', 'Apply snapshot', 'applySnapshot', 'src/lib/graph/core/GraphRuntime.ts'],
+      ] },
+      { id: 'graph-interaction', group: 'Graph', title: 'Graph Selection Drag & Local Graph', summary: 'Pointer and keyboard interactions update graph selection, camera movement, local graph state, and editor focus.', trigger: 'Canvas pointer or keyboard interaction', result: 'Graph UI and editor focus are synchronized', tags: ['selection', 'drag', 'local graph'], refs: [
+        ['entry', 'Receive pointer input', 'registerCanvasEngineEvents', 'src/lib/page/page-engine-init.ts'],
+        ['feature', 'Hit test graph node', 'GraphRuntime', 'src/lib/graph/core/GraphRuntime.ts'],
+        ['page', 'Open selected node', 'openGraphNode', 'src/lib/page/page-workspace-surface-runtime.ts'],
+        ['page', 'Sync editor focus', 'syncSelectionFromActiveEditor', 'src/lib/page/editor-close-actions.ts'],
+        ['feature', 'Update graph controller', 'setGraphSelectedNodeId', 'src/lib/page/controllers/graph-scene-controller.svelte.ts'],
+      ] },
+      { id: 'zoom', group: 'Settings', title: 'App Zoom Load & Change', summary: 'Zoom settings load from durable preferences, update UI optimistically, and persist through backend commands.', trigger: 'Zoom setting load or user change', result: 'Webview zoom and stored preference are updated', tags: ['settings', 'zoom', 'preference'], refs: [
+        ['page', 'Load zoom controller', 'load', 'src/lib/page/controllers/app-zoom-controller.svelte.ts'],
+        ['feature', 'Call zoom feature', 'AppZoomFeature', 'src/lib/features/settings/AppZoomFeature.ts'],
+        ['ipc', 'Invoke zoom command', 'app_zoom', 'src/lib/services/settings-service.ts'],
+        ['rust', 'Persist zoom setting', 'app_zoom_commands', 'src-tauri/src/commands/app_zoom_commands.rs'],
+        ['page', 'Apply zoom state', 'appZoom', 'src/lib/page/app-zoom.ts'],
+      ] },
+      { id: 'theme', group: 'Settings', title: 'Built-in Community Workspace Theme', summary: 'Theme selection merges built-in, community, and workspace CSS sources and applies them to the route.', trigger: 'Theme load or selection change', result: 'Active theme CSS is loaded', tags: ['theme', 'community', 'workspace'], refs: [
+        ['page', 'Load theme controller', 'load', 'src/lib/page/controllers/app-theme-controller.svelte.ts'],
+        ['feature', 'Load theme options', 'AppThemeFeature', 'src/lib/features/settings/AppThemeFeature.ts'],
+        ['ipc', 'Invoke theme command', 'theme_commands', 'src/lib/services/settings-service.ts'],
+        ['rust', 'Read theme service', 'theme_service', 'src-tauri/src/application/theme_service.rs'],
+        ['page', 'Apply theme CSS', 'markdown-editor-theme', 'src/lib/editor/markdown-editor-theme.ts'],
+      ] },
+      { id: 'durable-preferences', group: 'Settings', title: 'Common Durable Preferences Sync', summary: 'Durable preference sync reads cached and backend values, normalizes them, applies controllers, and persists changes.', trigger: 'Controller load or preference change', result: 'UI preferences are consistent across sessions', tags: ['preferences', 'durable', 'sync'], refs: [
+        ['page', 'Start durable sync', 'DurablePreferenceSync', 'src/lib/page/durable-preference-sync.ts'],
+        ['feature', 'Read preference value', 'load', 'src/lib/page/durable-preference-sync.ts'],
+        ['ipc', 'Persist preference', 'save', 'src/lib/page/durable-preference-sync.ts'],
+        ['page', 'Apply normalized value', 'applyValue', 'src/lib/page/durable-preference-sync.ts'],
+        ['page', 'Invalidate render', 'requestRender', 'src/lib/page/page-render-scheduler.ts'],
+      ] },
+      { id: 'community', group: 'Extensions', title: 'Community Catalog Install Remove', summary: 'Community catalog loading, install, and remove operations update package state and refresh theme options.', trigger: 'Community panel load or install action', result: 'Catalog and installed extension state are current', tags: ['community', 'install', 'catalog'], refs: [
+        ['page', 'Load community controller', 'load', 'src/lib/page/controllers/community-controller.svelte.ts'],
+        ['feature', 'Query community feature', 'CommunityFeature', 'src/lib/features/community/CommunityFeature.ts'],
+        ['ipc', 'Invoke community command', 'community', 'src/lib/services/community-service.ts'],
+        ['rust', 'Read catalog service', 'community_catalog_service', 'src-tauri/src/application/community_catalog_service.rs'],
+        ['rust', 'Install package', 'community_install_service', 'src-tauri/src/application/community_install_service.rs'],
+      ] },
+      { id: 'collaboration', group: 'Extensions', title: 'Collaboration Document Session Realtime Sync', summary: 'Collaboration services coordinate document registry, persistence snapshots, sessions, and realtime updates.', trigger: 'Collaboration document open or local update', result: 'Local and remote collaborative document state is synchronized', tags: ['collaboration', 'realtime', 'session'], refs: [
+        ['entry', 'Request collaboration action', 'CollaborationService', 'src/lib/collaboration/CollaborationService.ts'],
+        ['feature', 'Ensure document registry', 'CollaborationDocumentRegistry', 'src/lib/collaboration/collaboration-document-registry.ts'],
+        ['feature', 'Load persistence snapshot', 'CollaborationPersistenceClient', 'src/lib/collaboration/collaboration-persistence-client.ts'],
+        ['feature', 'Manage session', 'CollaborationSessionClient', 'src/lib/collaboration/collaboration-session-client.ts'],
+        ['ipc', 'Invoke collaboration command', 'collaboration_commands', 'src-tauri/src/commands/collaboration_commands.rs'],
+      ] },
+      { id: 'chat', group: 'Extensions', title: 'LLM Query & Markdown Save', summary: 'Chat prompts are sent to the backend LLM workflow, saved as workspace markdown, then picked up by indexing.', trigger: 'Chat prompt submit', result: 'Generated markdown appears in workspace', tags: ['LLM', 'markdown', 'chat'], refs: [
+        ['entry', 'Submit prompt', 'GraphChatBar', 'src/lib/page/components/GraphChatBar.svelte'],
+        ['feature', 'Call chat service', 'queryLlmAndSaveMarkdown', 'src/lib/services/chat-service.ts'],
+        ['ipc', 'Invoke chat command', 'query_llm_and_save_markdown', 'src/lib/services/chat-service.ts'],
+        ['rust', 'Run chat backend', 'chat_commands', 'src-tauri/src/commands/chat_commands.rs'],
+        ['infra', 'Write markdown file', 'chat_file_service', 'src-tauri/src/application/chat_file_service.rs'],
+      ] },
+      { id: 'system-actions', group: 'Extensions', title: 'Clipboard & File Explorer System Actions', summary: 'System actions copy text to clipboard or reveal paths in the operating system file explorer.', trigger: 'Context menu or toolbar action', result: 'Operating system clipboard or file explorer action runs', tags: ['clipboard', 'file explorer', 'system'], refs: [
+        ['entry', 'Select system action', 'copyTextToClipboard', 'src/lib/page/page-route-runtime-wiring.ts'],
+        ['page', 'Call system service', 'system-service', 'src/lib/services/system-service.ts'],
+        ['ipc', 'Invoke system command', 'copy_text_to_clipboard', 'src/lib/services/system-service.ts'],
+        ['rust', 'Handle system command', 'system_commands', 'src-tauri/src/commands/system_commands.rs'],
+        ['infra', 'Use platform integration', 'opener', 'src-tauri/src/app/bootstrap.rs'],
+      ] },
+      { id: 'pdf-annotations', group: 'Extensions', title: 'PDF Annotation Import Export Local Snapshot', summary: 'PDF annotation actions inspect backend capabilities, import or export annotation data, and persist local snapshots.', trigger: 'PDF viewer annotation action', result: 'Annotation state is imported, exported, or saved', tags: ['PDF', 'annotations', 'snapshot'], refs: [
+        ['entry', 'Request annotation action', 'PdfDocumentService', 'src/lib/editor/PdfDocumentService.ts'],
+        ['page', 'Check backend capabilities', 'getPdfAnnotationBackendCapabilities', 'src/lib/editor/PdfDocumentService.ts'],
+        ['ipc', 'Invoke PDF command', 'pdf_annotation_commands', 'src/lib/services/pdf-annotation-service.ts'],
+        ['rust', 'Process PDF annotations', 'pdf_annotation_commands', 'src-tauri/src/commands/pdf_annotation_commands.rs'],
+        ['infra', 'Transform PDF data', 'pdf_annotation_export_policy', 'src-tauri/src/application/pdf_annotation_export_policy.rs'],
+      ] },
+      { id: 'document-anchors', group: 'Extensions', title: 'Document Anchor Query & Save', summary: 'Document anchors connect editor positions to graph and document navigation through backend indexed anchor records.', trigger: 'Anchor panel or editor position save', result: 'Document anchors are queryable and reflected in UI', tags: ['anchors', 'document', 'navigation'], refs: [
+        ['entry', 'Request anchors', 'DocumentAnchorService', 'src/lib/editor/DocumentAnchorService.ts'],
+        ['feature', 'Build anchor DTO', 'DocumentAnchorService', 'src/lib/editor/DocumentAnchorService.ts'],
+        ['ipc', 'Invoke anchor command', 'get_document_anchors', 'src/lib/shared/ipc/command-names.ts'],
+        ['rust', 'Handle anchor command', 'index_commands', 'src-tauri/src/commands/index_commands.rs'],
+        ['infra', 'Persist anchor model', 'anchor', 'src-tauri/src/models/anchor.rs'],
+      ] },
+      { id: 'page-unmount', group: 'App Lifecycle', title: 'Page Unmount & Resource Cleanup', summary: 'Unmount cleanup persists editor session state and releases events, observers, workers, runtime, renderer, and GPU resources.', trigger: 'Route unmount or window teardown', result: 'Runtime resources are disposed', tags: ['cleanup', 'dispose', 'unmount'], refs: [
+        ['entry', 'Run cleanup callback', 'onMount cleanup', 'src/lib/page/page-lifecycle.ts'],
+        ['page', 'Set destroyed guard', 'runPageLifecycle', 'src/lib/page/page-lifecycle.ts'],
+        ['page', 'Persist editor session', 'persistEditorSessionState', 'src/lib/page/full-editor-runtime-view-session-actions.ts'],
+        ['feature', 'Destroy graph runtime', 'destroy', 'src/lib/graph/core/GraphRuntime.ts'],
+        ['infra', 'Release renderer backend', 'destroyCreatedEngine', 'src/lib/page/page-engine-init.ts'],
+      ] },
+    ];
+
+    const FLOWS = FLOW_SPECS.map(makeFlow);
+    const RELATION_KINDS = {
+      load:    { label: 'LOAD',    color: '#a78bfa' },
+      init:    { label: 'INIT',    color: '#60a5fa' },
+      restore: { label: 'RESTORE', color: '#c084fc' },
+      trigger: { label: 'TRIGGER', color: '#ffbf69' },
+      call:    { label: 'CALL',    color: '#7f8cff' },
+      event:   { label: 'EVENT',   color: '#4bd6c8' },
+      sync:    { label: 'SYNC',    color: '#38bdf8' },
+      apply:   { label: 'APPLY',   color: '#fb7185' },
+      reload:  { label: 'RELOAD',  color: '#34d399' },
+      extend:  { label: 'EXTEND',  color: '#f472b6' },
+      cleanup: { label: 'CLEANUP', color: '#94a3b8' },
+    };
+
+    const GROUP_RELATIONS = [
+      R('bootstrap-composition', 'App Lifecycle', 'App Lifecycle', 'init', 'tauri-bootstrap', 'frontend-composition', 'backend commands -> route services', 'Backend command registration provides the IPC surface consumed by frontend composition.'),
+      R('composition-mount', 'App Lifecycle', 'App Lifecycle', 'load', 'frontend-composition', 'page-mount', 'route services -> mounted lifecycle', 'Composed page services are injected before mounted lifecycle starts.'),
+      R('mount-engine', 'App Lifecycle', 'App Lifecycle', 'init', 'page-mount', 'engine-init', 'runPageEngineInit()', 'Mounted controllers initialize renderer and graph runtime.'),
+      R('engine-render-loop', 'App Lifecycle', 'App Lifecycle', 'trigger', 'engine-init', 'render-loop', 'requestRender("initial")', 'Engine initialization schedules the first render frame.'),
+      R('mount-workspace', 'App Lifecycle', 'Workspace', 'load', 'page-mount', 'workspace-tree-load', 'workspaceTree()', 'Initial mount requests active workspace settings and tree state.'),
+      R('settings-mount', 'Settings', 'App Lifecycle', 'restore', 'durable-preferences', 'page-mount', 'DurablePreferenceSync.load()', 'Durable preferences feed controller state during page mount.'),
+      R('workspace-registry-tree', 'Workspace', 'Workspace', 'reload', 'workspace-registry', 'workspace-tree-load', 'active workspace changed', 'Workspace registry changes reload tree and graph state.'),
+      R('workspace-create-tree', 'Workspace', 'Workspace', 'event', 'workspace-create-file', 'workspace-tree-load', 'create -> reload tree', 'New files refresh workspace tree state.'),
+      R('workspace-folder-tree', 'Workspace', 'Workspace', 'event', 'workspace-create-folder', 'workspace-tree-load', 'create folder -> reload tree', 'New folders refresh workspace tree state.'),
+      R('workspace-move-tree', 'Workspace', 'Workspace', 'event', 'workspace-move-rename', 'workspace-tree-load', 'move/rename -> reload tree', 'Move and rename operations refresh tree state.'),
+      R('workspace-copy-tree', 'Workspace', 'Workspace', 'event', 'workspace-external-copy', 'workspace-tree-load', 'external copy -> reload tree', 'External copies refresh tree state.'),
+      R('workspace-trash-tree', 'Workspace', 'Workspace', 'cleanup', 'workspace-trash', 'workspace-tree-load', 'trash -> reload tree', 'Trash operations remove entries and refresh tree state.'),
+      R('workspace-open-document', 'Workspace', 'Document & Editor', 'trigger', 'workspace-tree-load', 'document-open', 'row click -> openWorkspaceFile', 'Workspace rows trigger document open.'),
+      R('document-save-reindex', 'Document & Editor', 'Search & Index', 'call', 'document-save', 'reindex', 'save -> reindexChangedPaths', 'Document saves refresh search and graph indexes.'),
+      R('document-open-session', 'Document & Editor', 'Document & Editor', 'sync', 'document-open', 'editor-session', 'open editor -> persist session', 'Opened documents participate in editor session persistence.'),
+      R('editor-close-session', 'Document & Editor', 'Document & Editor', 'cleanup', 'editor-close', 'editor-session', 'close editor -> persist session', 'Editor close updates persisted session layout.'),
+      R('media-open-document', 'Document & Editor', 'Document & Editor', 'call', 'document-media-bytes', 'document-open', 'media resolve -> document context', 'Media reads are scoped to the active document context.'),
+      R('reindex-graph', 'Search & Index', 'Graph', 'event', 'reindex', 'graph-snapshot', 'workspace-indexed -> reloadSnapshot', 'Index completion reloads graph snapshots.'),
+      R('search-reindex', 'Search & Index', 'Search & Index', 'call', 'search', 'reindex', 'search depends on index data', 'Search results depend on current index data.'),
+      R('graph-render', 'Graph', 'App Lifecycle', 'trigger', 'graph-snapshot', 'render-loop', 'snapshot applied -> requestRender', 'Graph snapshots invalidate rendering.'),
+      R('graph-open-document', 'Graph', 'Document & Editor', 'trigger', 'graph-interaction', 'document-open', 'graph node click -> editor open', 'Graph node actions open matching documents.'),
+      R('editor-graph-sync', 'Document & Editor', 'Graph', 'sync', 'editor-session', 'graph-interaction', 'active editor -> graph selection', 'Editor session state synchronizes graph selection and occupancy.'),
+      R('zoom-render', 'Settings', 'App Lifecycle', 'apply', 'zoom', 'render-loop', 'zoom changed -> requestRender', 'Zoom changes invalidate frame rendering.'),
+      R('theme-render', 'Settings', 'App Lifecycle', 'apply', 'theme', 'render-loop', 'theme changed -> render update', 'Theme changes update rendered UI state.'),
+      R('community-theme', 'Extensions', 'Settings', 'reload', 'community', 'theme', 'theme package install -> reload themes', 'Community theme package changes reload theme options.'),
+      R('chat-workspace', 'Extensions', 'Workspace', 'event', 'chat', 'workspace-tree-load', 'markdown write -> tree reload', 'Chat output writes workspace markdown and refreshes tree/index state.'),
+      R('collab-document', 'Extensions', 'Document & Editor', 'extend', 'collaboration', 'document-open', 'collaboration attaches to editor document', 'Collaboration extends open document lifecycle.'),
+      R('pdf-document', 'Extensions', 'Document & Editor', 'extend', 'pdf-annotations', 'document-open', 'PDF annotation document context', 'PDF annotations operate inside document editor context.'),
+      R('anchor-document', 'Extensions', 'Document & Editor', 'extend', 'document-anchors', 'document-open', 'anchor lookup -> editor navigation', 'Document anchors extend editor navigation.'),
+      R('system-document', 'Extensions', 'Document & Editor', 'call', 'system-actions', 'document-open', 'copy/reveal active document path', 'System actions often operate on active document paths.'),
+      R('graph-cleanup', 'Graph', 'App Lifecycle', 'cleanup', 'graph-snapshot', 'page-unmount', 'GraphRuntime.destroy()', 'Unmount releases graph runtime resources.'),
+      R('editor-cleanup', 'Document & Editor', 'App Lifecycle', 'cleanup', 'editor-session', 'page-unmount', 'persist session -> dispose', 'Unmount persists editor session and disposes editor resources.'),
+      R('settings-cleanup', 'Settings', 'App Lifecycle', 'cleanup', 'theme', 'page-unmount', 'appTheme.dispose()', 'Unmount releases settings-related listeners.'),
+    ];
+    function R(id, from, to, kind, fromFlow, toFlow, via, description) {
+      return { id, from, to, kind, fromFlow, toFlow, via, description };
+    }
+
+    function makeFlow(spec) {
+      return {
+        id: spec.id,
+        group: spec.group,
+        title: spec.title,
+        summary: spec.summary,
+        trigger: spec.trigger,
+        result: spec.result,
+        tags: spec.tags,
+        steps: spec.refs.map(([lane, title, call, source], index) => S(
+          lane,
+          title,
+          call,
+          `${title} through ${source}.`,
+          call,
+          source,
+          index === spec.refs.length - 1 ? spec.result : `${title} completed`,
+        )),
+      };
+    }
+
+    function S(lane, title, code, desc, call, source, result, meta = {}) {
+      return {
+        lane,
+        title,
+        code,
+        desc,
+        call,
+        source,
+        result,
+        id: meta.id ?? '',
+        inputs: normalizeList(meta.inputs),
+        outputs: normalizeList(meta.outputs),
+      };
+    }
+
+    const CROSS_FUNCTION_EDGES = GROUP_RELATIONS.map(relation => {
+      const fromFlow = flowById(relation.fromFlow);
+      const toFlow = flowById(relation.toFlow);
+      const fromStep = fromFlow?.steps.at(-1);
+      const toStep = toFlow?.steps[0];
+      return F(
+        `${relation.id}:function`,
+        relation.kind,
+        relation.fromFlow,
+        fromStep?.id || 1,
+        relation.toFlow,
+        toStep?.id || 1,
+        fromStep?.call || relation.via,
+        toStep?.call || relation.via,
+        relation.via,
+        relation.description,
+        `${fromStep?.source || relation.fromFlow} -> ${toStep?.source || relation.toFlow}`,
+      );
+    });
+
+
+    function F(id, kind, fromFlow, fromStep, toFlow, toStep, fromFunction, toFunction, payload, effect, source) {
+      return { id, kind, fromFlow, fromStep, toFlow, toStep, fromFunction, toFunction, payload, effect, source };
+    }
+
+    function normalizeList(value) {
+      if (Array.isArray(value)) return value.filter(Boolean);
+      if (value == null || value === '') return [];
+      return [String(value)];
+    }
+
+    function stepIdFor(flowId, index) {
+      return `${flowId}:${String(index + 1).padStart(2, '0')}`;
+    }
+
+    function enrichFlowSteps() {
+      FLOWS.forEach(flow => {
+        flow.steps.forEach((step, index) => {
+          step.id = step.id || stepIdFor(flow.id, index);
+          step.flowId = flow.id;
+          step.index = index;
+          step.inputs = normalizeList(step.inputs);
+          step.outputs = normalizeList(step.outputs);
+          if (!step.inputs.length) {
+            step.inputs = [index === 0 ? `Trigger: ${flow.trigger}` : flow.steps[index - 1].result];
+          }
+          if (!step.outputs.length) {
+            step.outputs = [step.result];
+          }
+        });
+      });
+    }
+
+    function resolveStepId(flowId, selector) {
+      const flow = flowById(flowId);
+      if (!flow) throw new Error(`Unknown flow: ${flowId}`);
+      if (Number.isInteger(selector)) {
+        const step = flow.steps[selector - 1];
+        if (!step) throw new Error(`Unknown step index ${selector} in ${flowId}`);
+        return step.id;
+      }
+      const selectorText = String(selector);
+      const direct = flow.steps.find(step => step.id === selectorText);
+      if (direct) return direct.id;
+      const query = selectorText.toLowerCase();
+      const matched = flow.steps.find(step => [
+        step.title,
+        step.code,
+        step.call,
+        step.source,
+      ].some(value => String(value).toLowerCase().includes(query)));
+      if (!matched) throw new Error(`Unknown step selector "${selectorText}" in ${flowId}`);
+      return matched.id;
+    }
+
+    function normalizeFunctionEdge(edge) {
+      return {
+        ...edge,
+        fromStep: resolveStepId(edge.fromFlow, edge.fromStep),
+        toStep: resolveStepId(edge.toFlow, edge.toStep),
+      };
+    }
+
+    function buildSequentialFunctionEdges() {
+      return FLOWS.flatMap(flow => flow.steps.slice(0, -1).map((step, index) => {
+        const next = flow.steps[index + 1];
+        return F(
+          `${flow.id}:${String(index + 1).padStart(2, '0')}-to-${String(index + 2).padStart(2, '0')}`,
+          'internal',
+          flow.id,
+          step.id,
+          flow.id,
+          next.id,
+          step.call,
+          next.call,
+          step.outputs.join('; '),
+          next.inputs.join('; '),
+          `${step.source} -> ${next.source}`,
+        );
+      }));
+    }
+
+    enrichFlowSteps();
+    const FUNCTION_EDGES = [
+      ...buildSequentialFunctionEdges(),
+      ...CROSS_FUNCTION_EDGES.map(normalizeFunctionEdge),
+    ];
+
+    const state = {
+      flowIndex: 0,
+      stepIndex: 0,
+      playing: false,
+      timer: null,
+      speed: 1500,
+      loopAll: true,
+      filter: '',
+      showFlowRelations: true,
+      selectedSymbolId: '',
+    };
+
+    let CODEBASE_GRAPH = null;
+
+    const els = Object.fromEntries([
+      'flowList','flowSearch','groupCrumb','flowCrumb','flowGroup','flowTitle','flowSummary','heroMeta',
+      'currentStepTitle','currentStepDesc','progressLabel','progressPercent','progressBar','laneHeads',
+      'flowRelationMap','diagramWrap','diagramGrid','edgeLayer','detailRole','detailCall','detailSource',
+      'detailInputs','detailOutputs','detailEdges',
+      'logBody','boardScroll','prevButton','playButton','nextButton','speedSelect',
+      'loopToggle','resetButton','sidebar','menuButton','relationToggle'
+    ].map(id => [id, document.getElementById(id)]));
+
+    function currentFlow() { return FLOWS[state.flowIndex]; }
+    function currentStep() { return currentFlow().steps[state.stepIndex]; }
+
+    function renderLaneHeads() {
+      els.laneHeads.innerHTML = LANES.map(lane => `
+        <div class="lane-head">
+          <strong>${escapeHtml(lane.label)}</strong>
+          <span>${escapeHtml(lane.sub)}</span>
+        </div>
+      `).join('');
+    }
+
+    function flowById(id) {
+      return FLOWS.find(flow => flow.id === id) ?? null;
+    }
+
+    function flowIndexById(id) {
+      return FLOWS.findIndex(flow => flow.id === id);
+    }
+
+    function relationsForFlow(flowId) {
+      return GROUP_RELATIONS.filter(relation => relation.fromFlow === flowId || relation.toFlow === flowId);
+    }
+
+    function functionEdgesForFlow(flowId) {
+      return FUNCTION_EDGES.filter(edge => edge.fromFlow === flowId || edge.toFlow === flowId);
+    }
+
+    function crossFunctionEdgesForFlow(flowId) {
+      return functionEdgesForFlow(flowId).filter(edge => edge.fromFlow !== edge.toFlow);
+    }
+
+    function functionEdgesForStep(flowId, stepId) {
+      const incoming = FUNCTION_EDGES.filter(edge => edge.toFlow === flowId && edge.toStep === stepId);
+      const outgoing = FUNCTION_EDGES.filter(edge => edge.fromFlow === flowId && edge.fromStep === stepId);
+      return { incoming, outgoing };
+    }
+
+    function stepById(flowId, stepId) {
+      return flowById(flowId)?.steps.find(step => step.id === stepId) ?? null;
+    }
+
+    function stepLabel(flowId, stepId) {
+      const flow = flowById(flowId);
+      const step = stepById(flowId, stepId);
+      if (!flow || !step) return stepId;
+      return `${flow.title} / ${String(step.index + 1).padStart(2, '0')} ${step.title}`;
+    }
+
+    function boardNodeKey(flowId, stepId) {
+      return `${flowId}::${stepId}`;
+    }
+
+    function buildBoardProjection(flow) {
+      const crossEdges = crossFunctionEdgesForFlow(flow.id);
+      const rows = [];
+      const nodes = [];
+      const seen = new Set();
+
+      function addNode(flowId, stepId, role, edge = null) {
+        const step = stepById(flowId, stepId);
+        const nodeFlow = flowById(flowId);
+        if (!step || !nodeFlow) return;
+        const key = boardNodeKey(flowId, stepId);
+        if (seen.has(`${role}:${key}`)) return;
+        seen.add(`${role}:${key}`);
+        rows.push({ flowId, stepId, role, edge });
+        const laneIndex = Math.max(0, LANES.findIndex(lane => lane.id === step.lane));
+        nodes.push({
+          key,
+          role,
+          flowId,
+          stepId,
+          flow: nodeFlow,
+          step,
+          laneIndex,
+          row: rows.length,
+        });
+      }
+
+      crossEdges
+        .filter(edge => edge.toFlow === flow.id)
+        .forEach(edge => addNode(edge.fromFlow, edge.fromStep, 'incoming', edge));
+
+      flow.steps.forEach(step => addNode(flow.id, step.id, 'current'));
+
+      crossEdges
+        .filter(edge => edge.fromFlow === flow.id)
+        .forEach(edge => addNode(edge.toFlow, edge.toStep, 'outgoing', edge));
+
+      return { nodes, edges: crossEdges, rowCount: Math.max(rows.length, flow.steps.length) };
+    }
+
+    function renderBoardNode(node) {
+      const classes = [
+        'step-node',
+        `${node.role}-node`,
+        node.role !== 'current' ? 'context-node' : '',
+      ].filter(Boolean).join(' ');
+      const seq = node.role === 'current'
+        ? String(node.step.index + 1)
+        : node.role === 'incoming' ? 'IN' : 'OUT';
+      return `
+        <article class="${classes}"
+                 data-flow-id="${escapeHtml(node.flowId)}"
+                 data-step-id="${escapeHtml(node.stepId)}"
+                 data-node-key="${escapeHtml(node.key)}"
+                 ${node.flowId === currentFlow().id ? `data-step-index="${node.step.index}"` : ''}
+                 style="grid-column:${node.laneIndex + 1};grid-row:${node.row}">
+          <div class="node-topline">
+            <span class="node-seq">${escapeHtml(seq)}</span>
+            <span class="node-flow">${escapeHtml(node.flow.group)} / ${escapeHtml(node.flow.title)}</span>
+          </div>
+          <div class="node-title">${escapeHtml(node.step.title)}</div>
+          <div class="node-code">${escapeHtml(node.step.code)}</div>
+        </article>
+      `;
+    }
+
+    function graphSymbolsForStep(step) {
+      if (!CODEBASE_GRAPH?.symbols?.length) return [];
+      const callName = String(step.call || step.code || '').match(/[A-Za-z_$][\w$]*/)?.[0];
+      return CODEBASE_GRAPH.symbols.filter(symbol => {
+        if (symbol.repoPath !== step.source) return false;
+        if (!callName) return true;
+        return symbol.name === callName || String(symbol.signature || '').includes(callName);
+      }).slice(0, 3);
+    }
+
+    function sourceReferenceMarkup(step) {
+      const symbols = graphSymbolsForStep(step);
+      if (!symbols.length) return escapeHtml(step.source);
+      return symbols.map(symbol => {
+        const range = symbol.range;
+        const label = `${range.repoPath}:${range.startLine}${range.endLine !== range.startLine ? `-${range.endLine}` : ''}`;
+        return `<a href="${escapeHtml(range.githubUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(range.localPath || '')}" data-local-path="${escapeHtml(range.localPath || '')}">${escapeHtml(label)}</a>`;
+      }).join('<br>');
+    }
+
+    function codebaseSymbolById(symbolId) {
+      return CODEBASE_GRAPH?.symbols?.find(symbol => symbol.id === symbolId) ?? null;
+    }
+
+    function codebaseFileById(fileId) {
+      return CODEBASE_GRAPH?.files?.find(file => file.id === fileId) ?? null;
+    }
+
+    function symbolLocationLabel(symbol) {
+      const range = symbol?.range;
+      if (!range) return '';
+      return `${range.repoPath}:${range.startLine}${range.endLine !== range.startLine ? `-${range.endLine}` : ''}`;
+    }
+
+    function symbolSourceLink(symbol) {
+      if (!symbol?.range) return '';
+      const label = symbolLocationLabel(symbol);
+      return `<a href="${escapeHtml(symbol.range.githubUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(symbol.range.localPath || '')}" data-local-path="${escapeHtml(symbol.range.localPath || '')}">${escapeHtml(label)}</a>`;
+    }
+
+    function codebaseEdgesForSymbol(symbolId) {
+      if (!CODEBASE_GRAPH?.edges?.length) return { incoming: [], outgoing: [] };
+      return {
+        incoming: CODEBASE_GRAPH.edges.filter(edge => edge.to === symbolId && edge.from !== symbolId).slice(0, 24),
+        outgoing: CODEBASE_GRAPH.edges.filter(edge => edge.from === symbolId && edge.to && edge.to !== symbolId).slice(0, 24),
+      };
+    }
+
+    function codebaseSymbolSearchResults(query) {
+      if (!CODEBASE_GRAPH?.symbols?.length || query.length < 2) return [];
+      const normalized = query.toLowerCase();
+      return CODEBASE_GRAPH.symbols
+        .filter(symbol => [
+          symbol.name,
+          symbol.kind,
+          symbol.signature,
+          symbol.repoPath,
+          symbol.range?.repoPath,
+        ].some(value => String(value || '').toLowerCase().includes(normalized)))
+        .sort((a, b) => symbolSearchScore(b, normalized) - symbolSearchScore(a, normalized))
+        .slice(0, 12);
+    }
+
+    function symbolSearchScore(symbol, query) {
+      const name = String(symbol.name || '').toLowerCase();
+      const signature = String(symbol.signature || '').toLowerCase();
+      const path = String(symbol.range?.repoPath || symbol.repoPath || '').toLowerCase();
+      let score = 0;
+      if (name === query) score += 1000;
+      if (name.includes(query)) score += 300;
+      if (signature.includes(query)) score += 80;
+      if (path.includes(query)) score += 30;
+      if (symbol.kind === 'tauri-command') score += 220;
+      if (symbol.kind === 'event') score += 180;
+      if (symbol.exported) score += 20;
+      return score;
+    }
+
+    function analyzerMetaChips() {
+      const stats = CODEBASE_GRAPH?.stats;
+      if (!stats) return ['<span class="meta-chip">Analyzer graph loading</span>'];
+      return [
+        `<span class="meta-chip">Analyzed files - ${stats.files}</span>`,
+        `<span class="meta-chip">Symbols - ${stats.symbols}</span>`,
+        `<span class="meta-chip">Edges - ${stats.edges}</span>`,
+      ];
+    }
+
+    function renderSymbolSearchSection(query) {
+      const results = codebaseSymbolSearchResults(query);
+      if (!results.length) return '';
+      return `
+        <section class="symbol-search-section">
+          <div class="symbol-search-title">
+            <span>Code Symbols</span>
+            <span>${results.length}</span>
+          </div>
+          ${results.map(symbol => `
+            <button class="symbol-search-item" type="button" data-symbol-id="${escapeHtml(symbol.id)}">
+              <strong>${escapeHtml(symbol.name)}</strong>
+              <span>${escapeHtml(symbol.kind)} / ${escapeHtml(symbol.language)}</span>
+              <code>${escapeHtml(symbolLocationLabel(symbol))}</code>
+            </button>
+          `).join('')}
+        </section>
+      `;
+    }
+
+    function buildSymbolBoardProjection(symbolId) {
+      const target = codebaseSymbolById(symbolId);
+      if (!target) return null;
+      const { incoming, outgoing } = codebaseEdgesForSymbol(symbolId);
+      const nodes = [];
+      const seen = new Set();
+      const projectedEdges = [];
+
+      function addSymbolNode(symbol, role, row, laneIndex) {
+        if (!symbol || seen.has(symbol.id)) return;
+        seen.add(symbol.id);
+        nodes.push({ symbol, role, row, laneIndex });
+      }
+
+      function placeholderSymbol(edge, side) {
+        return {
+          id: `placeholder:${edge.id}:${side}`,
+          kind: edge.kind || 'edge',
+          name: edge.unresolvedName || edge.label || 'unresolved',
+          signature: edge.label || edge.unresolvedName || '',
+          language: 'unresolved',
+          repoPath: edge.range?.repoPath || '',
+          range: edge.range,
+          exported: false,
+        };
+      }
+
+      addSymbolNode(target, 'target', Math.max(1, Math.ceil(Math.max(incoming.length, outgoing.length, 1) / 2)), 2);
+      incoming.forEach((edge, index) => {
+        const peer = codebaseSymbolById(edge.from) || placeholderSymbol(edge, 'from');
+        addSymbolNode(peer, 'incoming', index + 1, 0);
+        projectedEdges.push({ ...edge, fromKey: peer.id, toKey: target.id, peerId: peer.id });
+      });
+      outgoing.forEach((edge, index) => {
+        const peer = codebaseSymbolById(edge.to) || placeholderSymbol(edge, 'to');
+        addSymbolNode(peer, 'outgoing', index + 1, 4);
+        projectedEdges.push({ ...edge, fromKey: target.id, toKey: peer.id, peerId: peer.id });
+      });
+
+      return {
+        target,
+        nodes,
+        edges: projectedEdges,
+        rowCount: Math.max(incoming.length, outgoing.length, 1),
+      };
+    }
+
+    function renderSymbolNode(node) {
+      const symbol = node.symbol;
+      const seq = node.role === 'target' ? 'SEL' : node.role === 'incoming' ? 'IN' : 'OUT';
+      return `
+        <article class="step-node symbol-node ${node.role === 'target' ? 'target-symbol' : 'context-node'}"
+                 data-symbol-id="${escapeHtml(symbol.id)}"
+                 data-node-key="${escapeHtml(symbol.id)}"
+                 style="grid-column:${node.laneIndex + 1} / span 2;grid-row:${node.row}">
+          <div class="node-topline">
+            <span class="node-seq">${escapeHtml(seq)}</span>
+            <span class="node-flow">${escapeHtml(symbol.kind)} / ${escapeHtml(symbol.language)}</span>
+          </div>
+          <div class="node-title">${escapeHtml(symbol.name)}</div>
+          <div class="node-code">${escapeHtml(symbolLocationLabel(symbol))}</div>
+        </article>
+      `;
+    }
+
+    function renderSymbolBoard(symbolId) {
+      const projection = buildSymbolBoardProjection(symbolId);
+      if (!projection) return;
+      const symbol = projection.target;
+      els.flowTitle.textContent = symbol.name;
+      els.flowSummary.textContent = symbol.signature || symbolLocationLabel(symbol);
+      els.flowGroup.textContent = 'Code Symbol Graph';
+      els.groupCrumb.textContent = 'Code Symbol Graph';
+      els.flowCrumb.textContent = symbol.name;
+      els.heroMeta.innerHTML = [
+        `<span class="meta-chip">${escapeHtml(symbol.kind)}</span>`,
+        `<span class="meta-chip">${escapeHtml(symbol.language)}</span>`,
+        `<span class="meta-chip">${escapeHtml(symbolLocationLabel(symbol))}</span>`,
+      ].join('');
+      els.currentStepTitle.textContent = symbol.name;
+      els.currentStepDesc.textContent = symbol.signature || '';
+      els.progressLabel.textContent = `${projection.edges.length} edges`;
+      els.progressPercent.textContent = CODEBASE_GRAPH?.stats ? `${CODEBASE_GRAPH.stats.symbols} symbols` : '';
+      els.progressBar.style.width = '100%';
+      els.detailRole.textContent = `${symbol.kind} / ${symbol.language}`;
+      els.detailCall.textContent = symbol.signature || symbol.name;
+      els.detailSource.innerHTML = symbolSourceLink(symbol);
+      els.detailInputs.innerHTML = renderDetailChipList(codebaseEdgesForSymbol(symbol.id).incoming.map(edge => edge.label || edge.kind).slice(0, 8));
+      els.detailOutputs.innerHTML = renderDetailChipList(codebaseEdgesForSymbol(symbol.id).outgoing.map(edge => edge.label || edge.kind).slice(0, 8));
+      els.detailEdges.innerHTML = projection.edges.slice(0, 12).map(edge => {
+        const peer = codebaseSymbolById(edge.peerId) || projection.nodes.find(node => node.symbol.id === edge.peerId)?.symbol;
+        return `<button class="detail-edge-card" type="button" data-symbol-id="${escapeHtml(peer?.id || '')}">
+          <strong>${escapeHtml(edge.kind.toUpperCase())} / ${escapeHtml(edge.confidence || '')}</strong>
+          <span>${escapeHtml(edge.label || edge.unresolvedName || '')}</span>
+          <code>${escapeHtml(peer ? symbolLocationLabel(peer) : 'unresolved')}</code>
+        </button>`;
+      }).join('') || '<span class="detail-chip">No symbol edges.</span>';
+      els.detailEdges.querySelectorAll('[data-symbol-id]').forEach(button => {
+        button.addEventListener('click', () => selectSymbolById(button.dataset.symbolId));
+      });
+      els.logBody.innerHTML = projection.edges.slice(0, 20).map((edge, index) => `
+        <div class="log-entry ${index === 0 ? 'current' : ''}">
+          <span class="log-time">${escapeHtml(edge.kind)}</span>
+          <span class="log-lane">${escapeHtml(edge.confidence || '')}</span>
+          <span>${escapeHtml(edge.label || edge.unresolvedName || '')}</span>
+        </div>
+      `).join('');
+      els.flowRelationMap.hidden = false;
+      els.flowRelationMap.innerHTML = `
+        <div class="flow-relation-layout">
+          <section class="flow-relation-column"><div class="flow-relation-column-head"><strong>Incoming symbols</strong><span class="flow-relation-badge">${codebaseEdgesForSymbol(symbol.id).incoming.length}</span></div></section>
+          <article class="flow-current-card"><div class="flow-current-label">Selected symbol</div><div class="flow-current-title">${escapeHtml(symbol.name)}</div><div class="flow-current-group">${symbolSourceLink(symbol)}</div></article>
+          <section class="flow-relation-column"><div class="flow-relation-column-head"><strong>Outgoing symbols</strong><span class="flow-relation-badge">${codebaseEdgesForSymbol(symbol.id).outgoing.length}</span></div></section>
+        </div>
+      `;
+      els.diagramGrid.style.gridTemplateRows = `repeat(${projection.rowCount}, minmax(94px, auto))`;
+      els.diagramGrid.innerHTML = projection.nodes.map(renderSymbolNode).join('');
+      els.diagramGrid.querySelectorAll('[data-symbol-id]').forEach(node => {
+        node.addEventListener('click', () => selectSymbolById(node.dataset.symbolId));
+      });
+      requestAnimationFrame(drawEdges);
+      renderSidebar();
+    }
+
+    function relationKind(relation) {
+      return RELATION_KINDS[relation.kind] ?? RELATION_KINDS.call;
+    }
+
+    function renderFlowRelationCard(relation, direction) {
+      const kind = relationKind(relation);
+      const targetFlowId = direction === 'incoming' ? relation.fromFlow : relation.toFlow;
+      const targetFlowTitle = flowById(targetFlowId)?.title ?? targetFlowId;
+      const fromFlowTitle = flowById(relation.fromFlow)?.title ?? relation.fromFlow;
+      const toFlowTitle = flowById(relation.toFlow)?.title ?? relation.toFlow;
+      const roleText = direction === 'incoming' ? 'Incoming link' : 'Outgoing link';
+      return `
+        <button class="flow-link-card"
+                type="button"
+                data-target-flow-id="${escapeHtml(targetFlowId)}"
+                style="--relation-color:${kind.color}"
+                title="${escapeHtml(relation.description)}">
+          <span class="flow-link-role">${roleText}</span>
+          <span class="flow-link-title">${escapeHtml(targetFlowTitle)}</span>
+          <span class="flow-link-route">${escapeHtml(`${fromFlowTitle} -> ${toFlowTitle}`)}</span>
+          <span class="flow-link-meta">
+            <span>${escapeHtml(`${relation.from} -> ${relation.to}`)}</span>
+            <span class="flow-link-kind">${kind.label}</span>
+          </span>
+          <code class="flow-link-via">via ${escapeHtml(relation.via)}</code>
+          <span class="flow-link-copy">${escapeHtml(relation.description)}</span>
+        </button>
+      `;
+    }
+
+    function renderFunctionEdgeCard(edge, direction) {
+      const targetFlowId = direction === 'incoming' ? edge.fromFlow : edge.toFlow;
+      const targetStepId = direction === 'incoming' ? edge.fromStep : edge.toStep;
+      const sourceLabel = stepLabel(edge.fromFlow, edge.fromStep);
+      const targetLabel = stepLabel(edge.toFlow, edge.toStep);
+      const fromStep = stepById(edge.fromFlow, edge.fromStep);
+      const toStep = stepById(edge.toFlow, edge.toStep);
+      return `
+        <button class="function-edge-card"
+                type="button"
+                data-target-flow-id="${escapeHtml(targetFlowId)}"
+                data-target-step-id="${escapeHtml(targetStepId)}">
+          <span class="function-edge-route">${escapeHtml(edge.fromFunction)} -> ${escapeHtml(edge.toFunction)}</span>
+          <span class="function-edge-meta">${escapeHtml(edge.payload)} / ${escapeHtml(edge.effect)}</span>
+          <span class="function-edge-source">${escapeHtml(sourceLabel)} -> ${escapeHtml(targetLabel)}</span>
+          <span class="function-edge-source">${fromStep ? sourceReferenceMarkup(fromStep) : escapeHtml(edge.source)} -> ${toStep ? sourceReferenceMarkup(toStep) : ''}</span>
+        </button>
+      `;
+    }
+
+    function renderFunctionEdgeSection(edges, direction) {
+      return `
+        <div class="function-edge-section">
+          <div class="function-edge-title">
+            <span>Function ${direction}</span>
+            <span class="flow-relation-badge">${edges.length}</span>
+          </div>
+          <div class="function-edge-list">
+            ${edges.length
+              ? edges.map(edge => renderFunctionEdgeCard(edge, direction)).join('')
+              : '<div class="flow-link-empty">No cross-flow function edges.</div>'}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderFlowRelationColumn(title, emptyText, relations, direction, functionEdges) {
+      return `
+        <section class="flow-relation-column">
+          <div class="flow-relation-column-head">
+            <strong>${title}</strong>
+            <span class="flow-relation-badge">${relations.length}</span>
+          </div>
+          <div class="flow-link-stack">
+            ${relations.length
+              ? relations.map(relation => renderFlowRelationCard(relation, direction)).join('')
+              : `<div class="flow-link-empty">${emptyText}</div>`}
+          </div>
+          ${renderFunctionEdgeSection(functionEdges, direction)}
+        </section>
+      `;
+    }
+
+    function renderFlowRelationMap() {
+      if (!els.flowRelationMap) return;
+      if (!state.showFlowRelations) {
+        els.flowRelationMap.hidden = true;
+        els.flowRelationMap.innerHTML = '';
+        return;
+      }
+
+      const flow = currentFlow();
+      const relations = relationsForFlow(flow.id);
+      const incoming = relations.filter(relation => relation.toFlow === flow.id);
+      const outgoing = relations.filter(relation => relation.fromFlow === flow.id);
+      const functionRelations = crossFunctionEdgesForFlow(flow.id);
+      const functionIncoming = functionRelations.filter(edge => edge.toFlow === flow.id);
+      const functionOutgoing = functionRelations.filter(edge => edge.fromFlow === flow.id);
+      els.flowRelationMap.hidden = false;
+      els.flowRelationMap.innerHTML = `
+        <div class="flow-relation-layout">
+          ${renderFlowRelationColumn('Incoming links', 'No direct links enter this flow.', incoming, 'incoming', functionIncoming)}
+          <article class="flow-current-card">
+            <div class="flow-current-label">Current flow</div>
+            <div class="flow-current-title">${escapeHtml(flow.title)}</div>
+            <div class="flow-current-group">${escapeHtml(flow.group)}</div>
+            <div class="flow-current-stats">
+              <span>In ${incoming.length}</span>
+              <span>Out ${outgoing.length}</span>
+              <span>Total ${relations.length}</span>
+              <span>Fn in ${functionIncoming.length}</span>
+              <span>Fn out ${functionOutgoing.length}</span>
+            </div>
+          </article>
+          ${renderFlowRelationColumn('Outgoing links', 'No direct links leave this flow.', outgoing, 'outgoing', functionOutgoing)}
+        </div>
+      `;
+
+      els.flowRelationMap.querySelectorAll('[data-target-flow-id]').forEach(button => {
+        button.addEventListener('click', () => {
+          selectFlowById(button.dataset.targetFlowId, button.dataset.targetStepId);
+        });
+      });
+    }
+    function renderSidebar() {
+      const query = state.filter.trim().toLowerCase();
+      const groups = new Map();
+      FLOWS.forEach((flow, index) => {
+        const relationText = relationsForFlow(flow.id).flatMap(relation => [
+          relation.from, relation.to, relation.via, relation.description, relationKind(relation).label,
+        ]);
+        const functionEdgeText = functionEdgesForFlow(flow.id).flatMap(edge => [
+          edge.fromFunction, edge.toFunction, edge.payload, edge.effect, edge.source,
+        ]);
+        const stepText = flow.steps.flatMap(s => [
+          s.id, s.title, s.code, s.call, s.source, ...s.inputs, ...s.outputs,
+        ]);
+        const haystack = [flow.group, flow.title, flow.summary, flow.tags.join(' '), ...relationText, ...functionEdgeText, ...stepText].join(' ').toLowerCase();
+        if (query && !haystack.includes(query)) return;
+        if (!groups.has(flow.group)) groups.set(flow.group, []);
+        groups.get(flow.group).push({flow,index});
+      });
+
+      const symbolSearchMarkup = renderSymbolSearchSection(query);
+
+      if (!groups.size && !symbolSearchMarkup) {
+        els.flowList.innerHTML = '<div class="empty-state">No matching flows.</div>';
+        return;
+      }
+
+      const activeGroup = currentFlow().group;
+      els.flowList.innerHTML = `
+        ${symbolSearchMarkup}
+        ${[...groups.entries()].map(([group, items]) => {
+          const isActiveGroup = group === activeGroup;
+          return `
+            <section class="group-block ${isActiveGroup ? 'active-group' : ''}" data-group="${escapeHtml(group)}">
+              <div class="group-title">
+                <span class="group-title-main"><span>${escapeHtml(group)}</span><span class="group-count">${items.length}</span></span>
+              </div>
+              ${items.map(({flow,index}) => {
+                const relationCount = relationsForFlow(flow.id).length;
+                return `
+                  <button class="flow-item ${index === state.flowIndex ? 'active' : ''}" data-flow-index="${index}">
+                    <span class="flow-index">${String(index + 1).padStart(2, '0')}</span>
+                    <span class="flow-name">${escapeHtml(flow.title)}</span>
+                    <span class="flow-meta">
+                      <span class="flow-relation-count" title="Direct flow relation count">${relationCount ? `x${relationCount}` : ''}</span>
+                      <span class="flow-step-count">${flow.steps.length}</span>
+                    </span>
+                  </button>
+                `;
+              }).join('')}
+            </section>
+          `;
+        }).join('')}
+      `;
+
+      els.flowList.querySelectorAll('.flow-item').forEach(button => {
+        button.addEventListener('click', () => {
+          selectFlow(Number(button.dataset.flowIndex));
+          els.sidebar.classList.remove('open');
+        });
+      });
+      els.flowList.querySelectorAll('[data-symbol-id]').forEach(button => {
+        button.addEventListener('click', () => {
+          selectSymbolById(button.dataset.symbolId);
+          els.sidebar.classList.remove('open');
+        });
+      });
+    }
+
+    function renderFlow() {
+      const flow = currentFlow();
+      els.groupCrumb.textContent = flow.group;
+      els.flowCrumb.textContent = flow.title;
+      els.flowGroup.textContent = flow.group;
+      els.flowTitle.textContent = flow.title;
+      els.flowSummary.textContent = flow.summary;
+      els.heroMeta.innerHTML = [
+        `<span class="meta-chip">Trigger - ${escapeHtml(flow.trigger)}</span>`,
+        `<span class="meta-chip">Result - ${escapeHtml(flow.result)}</span>`,
+        `<span class="meta-chip">${flow.steps.length} steps</span>`,
+        ...(relationsForFlow(flow.id).length ? [`<span class="meta-chip">Flow links - ${relationsForFlow(flow.id).length}</span>`] : []),
+        ...flow.tags.slice(0, 3).map(tag => `<span class="meta-chip">${escapeHtml(tag)}</span>`),
+        ...analyzerMetaChips(),
+      ].join('');
+
+      renderFlowRelationMap();
+      const boardProjection = buildBoardProjection(flow);
+      els.diagramGrid.dataset.projection = JSON.stringify({
+        edges: boardProjection.edges.map(edge => edge.id),
+      });
+      els.diagramGrid.style.gridTemplateRows = `repeat(${boardProjection.rowCount}, minmax(94px, auto))`;
+      els.edgeLayer.querySelectorAll('.edge').forEach(edge => edge.remove());
+      els.diagramGrid.innerHTML = boardProjection.nodes.map(renderBoardNode).join('');
+
+      els.diagramGrid.querySelectorAll('.step-node').forEach(node => {
+        node.addEventListener('click', () => {
+          if (node.dataset.flowId === flow.id && node.dataset.stepIndex) {
+            setStep(Number(node.dataset.stepIndex));
+          } else {
+            selectFlowById(node.dataset.flowId, node.dataset.stepId);
+          }
+        });
+      });
+
+      requestAnimationFrame(() => {
+        drawEdges();
+        renderStep();
+      });
+    }
+
+    function renderDetailChipList(values) {
+      return normalizeList(values).map(value => `<span class="detail-chip">${escapeHtml(value)}</span>`).join('');
+    }
+
+    function renderStepDetailEdge(edge, direction) {
+      const peerFlowId = direction === 'incoming' ? edge.fromFlow : edge.toFlow;
+      const peerStepId = direction === 'incoming' ? edge.fromStep : edge.toStep;
+      const peerLabel = stepLabel(peerFlowId, peerStepId);
+      const route = direction === 'incoming'
+        ? `${edge.fromFunction} -> ${edge.toFunction}`
+        : `${edge.fromFunction} -> ${edge.toFunction}`;
+      return `
+        <button class="detail-edge-card"
+                type="button"
+                data-target-flow-id="${escapeHtml(peerFlowId)}"
+                data-target-step-id="${escapeHtml(peerStepId)}">
+          <strong>${direction.toUpperCase()} / ${escapeHtml(route)}</strong>
+          <span>${escapeHtml(edge.payload)} / ${escapeHtml(edge.effect)}</span>
+          <code>${escapeHtml(peerLabel)}</code>
+          <span>${sourceReferenceMarkup(stepById(peerFlowId, peerStepId) || {})}</span>
+        </button>
+      `;
+    }
+
+    function renderStepFunctionDetails(flow, step) {
+      const { incoming, outgoing } = functionEdgesForStep(flow.id, step.id);
+      els.detailInputs.innerHTML = renderDetailChipList(step.inputs);
+      els.detailOutputs.innerHTML = renderDetailChipList(step.outputs);
+      els.detailEdges.innerHTML = [
+        ...incoming.map(edge => renderStepDetailEdge(edge, 'incoming')),
+        ...outgoing.map(edge => renderStepDetailEdge(edge, 'outgoing')),
+      ].join('') || '<span class="detail-chip">No function edges.</span>';
+      els.detailEdges.querySelectorAll('[data-target-flow-id]').forEach(button => {
+        button.addEventListener('click', () => {
+          selectFlowById(button.dataset.targetFlowId, button.dataset.targetStepId);
+        });
+      });
+    }
+
+    function renderStep() {
+      const flow = currentFlow();
+      const step = currentStep();
+      const nodes = [...els.diagramGrid.querySelectorAll('.step-node')];
+      nodes.forEach(node => {
+        const index = Number(node.dataset.stepIndex);
+        const isCurrentFlowNode = node.dataset.flowId === flow.id && Number.isFinite(index);
+        node.classList.toggle('done', isCurrentFlowNode && index < state.stepIndex);
+        node.classList.toggle('active', isCurrentFlowNode && index === state.stepIndex);
+        node.classList.toggle('pending', isCurrentFlowNode && index > state.stepIndex);
+      });
+
+      let activeEdge = null;
+      [...els.edgeLayer.querySelectorAll('.edge')].forEach(edge => {
+        const active = edge.dataset.activeStep === step.id;
+        edge.classList.toggle('done', false);
+        edge.classList.toggle('active', active);
+        if (active) activeEdge = edge;
+      });
+      activeEdge?.parentNode?.appendChild(activeEdge);
+
+      els.currentStepTitle.textContent = step.title;
+      els.currentStepDesc.textContent = step.desc;
+      const progress = ((state.stepIndex + 1) / flow.steps.length) * 100;
+      els.progressLabel.textContent = `${state.stepIndex + 1} / ${flow.steps.length}`;
+      els.progressPercent.textContent = `${Math.round(progress)}%`;
+      els.progressBar.style.width = `${progress}%`;
+      els.detailRole.textContent = `${LANES.find(l => l.id === step.lane).label}: ${step.desc}`;
+      els.detailCall.textContent = step.call;
+      els.detailSource.innerHTML = sourceReferenceMarkup(step);
+      renderStepFunctionDetails(flow, step);
+
+      els.logBody.innerHTML = flow.steps.map((item, i) => `
+        <button class="log-entry ${i === state.stepIndex ? 'current' : ''}" data-step-index="${i}" type="button">
+          <span class="log-time">T+${String(i * 120).padStart(4,'0')}</span>
+          <span class="log-lane">${escapeHtml(item.lane.toUpperCase())}</span>
+          <span>${escapeHtml(item.call)} -> ${escapeHtml(item.result)}</span>
+        </button>
+      `).join('');
+      els.logBody.querySelectorAll('[data-step-index]').forEach(entry => {
+        entry.addEventListener('click', () => setStep(Number(entry.dataset.stepIndex)));
+      });
+      els.logBody.scrollTop = els.logBody.scrollHeight;
+
+      const activeLog = els.logBody.querySelector(`[data-step-index="${state.stepIndex}"]`);
+      activeLog?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      const activeNode = els.diagramGrid.querySelector(`[data-step-index="${state.stepIndex}"]`);
+      activeNode?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' });
+
+      updatePlayButton();
+    }
+
+    function drawEdges() {
+      if (state.selectedSymbolId) {
+        drawSymbolEdges();
+        return;
+      }
+      const nodes = [...els.diagramGrid.querySelectorAll('.step-node')];
+      const wrapRect = els.diagramWrap.getBoundingClientRect();
+      const width = els.diagramWrap.scrollWidth;
+      const height = els.diagramWrap.scrollHeight;
+      els.edgeLayer.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      els.edgeLayer.setAttribute('width', width);
+      els.edgeLayer.setAttribute('height', height);
+
+      const defs = els.edgeLayer.querySelector('defs')?.outerHTML || '';
+      const paths = [];
+      const rectFor = rect => {
+        const left = rect.left - wrapRect.left + els.boardScroll.scrollLeft;
+        const top = rect.top - wrapRect.top + els.boardScroll.scrollTop;
+        return {
+          left,
+          top,
+          right: left + rect.width,
+          bottom: top + rect.height,
+          centerX: left + rect.width / 2,
+          centerY: top + rect.height / 2,
+        };
+      };
+
+      const nodeByKey = new Map(nodes.map(node => [node.dataset.nodeKey, node]));
+      const flow = currentFlow();
+      const crossEdges = crossFunctionEdgesForFlow(flow.id);
+
+      crossEdges.forEach((edge, i) => {
+        const sourceNode = nodeByKey.get(boardNodeKey(edge.fromFlow, edge.fromStep));
+        const targetNode = nodeByKey.get(boardNodeKey(edge.toFlow, edge.toStep));
+        if (!sourceNode || !targetNode) return;
+        const a = rectFor(sourceNode.getBoundingClientRect());
+        const b = rectFor(targetNode.getBoundingClientRect());
+        const start = edge.fromFlow === flow.id
+          ? { x: a.centerX, y: a.bottom }
+          : { x: a.centerX, y: a.bottom };
+        const end = edge.toFlow === flow.id
+          ? { x: b.centerX, y: b.top }
+          : { x: b.centerX, y: b.top };
+        const sameColumn = Math.abs(start.x - end.x) < 8;
+        let d;
+        if (sameColumn) {
+          d = `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+        } else {
+          const gapY = Math.max(0, end.y - start.y);
+          const bendOffset = Math.min(18, Math.max(10, gapY * 0.32), gapY / 2);
+          const startBendY = start.y + bendOffset;
+          const endBendY = end.y - bendOffset;
+          const trunkX = start.x + (end.x - start.x) * 0.5;
+          d = `M ${start.x} ${start.y} L ${start.x} ${startBendY} L ${trunkX} ${startBendY} L ${trunkX} ${endBendY} L ${end.x} ${endBendY} L ${end.x} ${end.y}`;
+        }
+        const direction = edge.toFlow === flow.id ? 'incoming' : 'outgoing';
+        const activeStep = direction === 'incoming' ? edge.toStep : edge.fromStep;
+        paths.push({
+          index: i,
+          markup: `<path class="edge cross-edge ${direction}" data-edge-id="${escapeHtml(edge.id)}" data-active-step="${escapeHtml(activeStep)}" d="${d}" />`,
+        });
+      });
+      paths.sort((a, b) => a.index - b.index);
+      els.edgeLayer.innerHTML = defs + paths.map(path => path.markup).join('');
+      renderStep();
+    }
+
+    function drawSymbolEdges() {
+      const projection = buildSymbolBoardProjection(state.selectedSymbolId);
+      if (!projection) return;
+      const nodes = [...els.diagramGrid.querySelectorAll('.symbol-node')];
+      const wrapRect = els.diagramWrap.getBoundingClientRect();
+      const width = els.diagramWrap.scrollWidth;
+      const height = els.diagramWrap.scrollHeight;
+      els.edgeLayer.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      els.edgeLayer.setAttribute('width', width);
+      els.edgeLayer.setAttribute('height', height);
+      const defs = els.edgeLayer.querySelector('defs')?.outerHTML || '';
+      const nodeByKey = new Map(nodes.map(node => [node.dataset.nodeKey, node]));
+      const rectFor = rect => {
+        const left = rect.left - wrapRect.left + els.boardScroll.scrollLeft;
+        const top = rect.top - wrapRect.top + els.boardScroll.scrollTop;
+        return {
+          left,
+          top,
+          right: left + rect.width,
+          bottom: top + rect.height,
+          centerX: left + rect.width / 2,
+          centerY: top + rect.height / 2,
+        };
+      };
+      const paths = projection.edges.map((edge, index) => {
+        const sourceNode = nodeByKey.get(edge.fromKey || edge.from);
+        const targetNode = nodeByKey.get(edge.toKey || edge.to);
+        if (!sourceNode || !targetNode) return '';
+        const a = rectFor(sourceNode.getBoundingClientRect());
+        const b = rectFor(targetNode.getBoundingClientRect());
+        const start = { x: a.right, y: a.centerY };
+        const end = { x: b.left, y: b.centerY };
+        const trunkX = start.x + (end.x - start.x) * 0.5;
+        const d = `M ${start.x} ${start.y} C ${trunkX} ${start.y}, ${trunkX} ${end.y}, ${end.x} ${end.y}`;
+        const direction = edge.to === state.selectedSymbolId ? 'incoming' : 'outgoing';
+        return `<path class="edge cross-edge ${direction}" data-edge-id="${escapeHtml(edge.id)}" data-active-step="${escapeHtml(state.selectedSymbolId)}" d="${d}" />`;
+      }).filter(Boolean).join('');
+      els.edgeLayer.innerHTML = defs + paths;
+    }
+
+    function selectFlow(index, keepPlaying = true) {
+      const wasPlaying = state.playing;
+      stopTimer();
+      state.selectedSymbolId = '';
+      state.flowIndex = clamp(index, 0, FLOWS.length - 1);
+      state.stepIndex = 0;
+      renderFlow();
+      if (keepPlaying && wasPlaying) startTimer();
+    }
+
+    function selectFlowById(flowId, stepId = '') {
+      const targetIndex = flowIndexById(flowId);
+      if (targetIndex < 0) return;
+      state.filter = '';
+      els.flowSearch.value = '';
+      selectFlow(targetIndex);
+      if (stepId) {
+        const targetStepIndex = currentFlow().steps.findIndex(step => step.id === stepId);
+        if (targetStepIndex >= 0) setStep(targetStepIndex);
+      }
+      els.sidebar.classList.remove('open');
+    }
+
+    function selectSymbolById(symbolId) {
+      if (!codebaseSymbolById(symbolId)) return;
+      const wasPlaying = state.playing;
+      stopTimer();
+      state.selectedSymbolId = symbolId;
+      renderSymbolBoard(symbolId);
+      if (wasPlaying) pause();
+    }
+
+    function setStep(index) {
+      state.stepIndex = clamp(index, 0, currentFlow().steps.length - 1);
+      renderStep();
+      if (state.playing) restartTimer();
+    }
+
+    function nextStep() {
+      const flow = currentFlow();
+      if (state.stepIndex < flow.steps.length - 1) {
+        state.stepIndex += 1;
+        renderStep();
+        return;
+      }
+      if (state.loopAll) {
+        selectFlow((state.flowIndex + 1) % FLOWS.length, false);
+        if (state.playing) restartTimer();
+      } else {
+        pause();
+      }
+    }
+
+    function prevStep() {
+      if (state.stepIndex > 0) {
+        state.stepIndex -= 1;
+        renderStep();
+        return;
+      }
+      if (state.loopAll) {
+        const prevFlow = (state.flowIndex - 1 + FLOWS.length) % FLOWS.length;
+        state.flowIndex = prevFlow;
+        state.stepIndex = FLOWS[prevFlow].steps.length - 1;
+        renderFlow();
+      }
+    }
+
+    function play() {
+      state.playing = true;
+      startTimer();
+      updatePlayButton();
+    }
+
+    function pause() {
+      state.playing = false;
+      stopTimer();
+      updatePlayButton();
+    }
+
+    function togglePlay() { state.playing ? pause() : play(); }
+
+    function startTimer() {
+      stopTimer();
+      state.timer = window.setInterval(nextStep, state.speed);
+    }
+
+    function restartTimer() { if (state.playing) startTimer(); }
+
+    function stopTimer() {
+      if (state.timer) window.clearInterval(state.timer);
+      state.timer = null;
+    }
+
+    function updatePlayButton() {
+      els.playButton.innerHTML = state.playing
+        ? '<span class="label">Pause</span>'
+        : '<span class="label">Play</span>';
+      els.playButton.setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
+    }
+    function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+    }
+
+    async function loadCodebaseGraph() {
+      try {
+        const response = await fetch('generated/mindphase-codebase-graph.json', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        CODEBASE_GRAPH = await response.json();
+        if (state.selectedSymbolId) renderSymbolBoard(state.selectedSymbolId);
+        else renderFlow();
+        renderSidebar();
+      } catch (error) {
+        console.warn('[mindphase-learning] codebase graph unavailable:', error);
+      }
+    }
+
+    els.prevButton.addEventListener('click', () => { prevStep(); restartTimer(); });
+    els.nextButton.addEventListener('click', () => { nextStep(); restartTimer(); });
+    els.playButton.addEventListener('click', togglePlay);
+    els.resetButton.addEventListener('click', () => setStep(0));
+    els.speedSelect.addEventListener('change', event => {
+      state.speed = Number(event.target.value);
+      restartTimer();
+    });
+    els.loopToggle.addEventListener('change', event => { state.loopAll = event.target.checked; });
+    els.flowSearch.addEventListener('input', event => {
+      state.filter = event.target.value;
+      renderSidebar();
+    });
+    els.relationToggle.addEventListener('click', () => {
+      state.showFlowRelations = !state.showFlowRelations;
+      els.relationToggle.classList.toggle('active', state.showFlowRelations);
+      els.relationToggle.textContent = state.showFlowRelations ? 'ON' : 'OFF';
+      els.relationToggle.setAttribute('aria-pressed', String(state.showFlowRelations));
+      renderFlowRelationMap();
+    });
+    els.menuButton.addEventListener('click', () => els.sidebar.classList.toggle('open'));
+
+    document.addEventListener('click', event => {
+      if (window.innerWidth > 900) return;
+      if (!els.sidebar.classList.contains('open')) return;
+      if (els.sidebar.contains(event.target) || els.menuButton.contains(event.target)) return;
+      els.sidebar.classList.remove('open');
+    });
+
+    document.addEventListener('keydown', event => {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if (event.code === 'Space') { event.preventDefault(); togglePlay(); }
+      if (event.code === 'ArrowRight') { event.preventDefault(); nextStep(); restartTimer(); }
+      if (event.code === 'ArrowLeft') { event.preventDefault(); prevStep(); restartTimer(); }
+      if (event.code === 'Home') { event.preventDefault(); setStep(0); }
+      if (event.code === 'End') { event.preventDefault(); setStep(currentFlow().steps.length - 1); }
+    });
+
+    const resizeObserver = new ResizeObserver(() => requestAnimationFrame(drawEdges));
+    resizeObserver.observe(els.diagramWrap);
+    window.addEventListener('resize', () => requestAnimationFrame(drawEdges));
+
+    renderLaneHeads();
+    renderFlow();
+    void loadCodebaseGraph();
+  </script>
+</body>
+</html>

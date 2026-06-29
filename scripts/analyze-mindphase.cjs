@@ -73,9 +73,9 @@ const graph = {
     commitSha,
     analyzer: {
       name: "mindphase-learning-static-analyzer",
-      version: 1,
+      version: 2,
       note:
-        "Line ranges are derived from source text. TypeScript call edges use compiler API definition lookup when available, then fall back to name/import resolution. IPC command edges resolve commandNames.* to Rust #[tauri::command] functions when present.",
+        "Line ranges are derived from source text. TypeScript call edges use compiler API definition lookup when available, then fall back to name/import resolution. Frontend and Rust method symbols include qualifiedName/containerName metadata. IPC command edges resolve commandNames.* to Rust #[tauri::command] functions when present.",
       typescriptCompilerApi: Boolean(ts),
     },
   },
@@ -196,28 +196,59 @@ function analyzeFrontendFile(fileId, repoPath, lines) {
   });
 
   const exportedNames = new Set();
+  const containerRanges = [];
   lines.forEach((line, index) => {
     const lineNumber = index + 1;
     const signatureMatch =
       line.match(/^(\s*)(export\s+)?(async\s+)?function\s+([A-Za-z_$][\w$]*)\b/) ||
-      line.match(/^(\s*)(export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(/) ||
+      line.match(/^(\s*)(export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/) ||
       line.match(/^(\s*)(export\s+)?class\s+([A-Za-z_$][\w$]*)\b/);
-    if (!signatureMatch) return;
-    const name = signatureMatch[4] || signatureMatch[3];
-    const exported = Boolean(signatureMatch[2]);
+    if (signatureMatch) {
+      const name = signatureMatch[4] || signatureMatch[3];
+      const exported = Boolean(signatureMatch[2]);
+      const kind = line.includes("class ") ? "class" : "function";
+      const endLine = findBlockEnd(lines, index);
+      if (exported) exportedNames.add(name);
+      addSymbol({
+        kind,
+        name,
+        signature: trimSignature(line),
+        language: languageFor(repoPath),
+        fileId,
+        repoPath,
+        startLine: lineNumber,
+        endLine,
+        exported,
+      });
+      if (kind === "class") {
+        containerRanges.push({ kind, name, startIndex: index, endIndex: endLine - 1, exported });
+      }
+      return;
+    }
+
+    const objectMatch = line.match(/^(\s*)(export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*\{/);
+    if (!objectMatch) return;
+    const name = objectMatch[3];
+    const exported = Boolean(objectMatch[2]);
+    const endLine = findBlockEnd(lines, index);
     if (exported) exportedNames.add(name);
     addSymbol({
-      kind: line.includes("class ") ? "class" : "function",
+      kind: "object",
       name,
       signature: trimSignature(line),
       language: languageFor(repoPath),
       fileId,
       repoPath,
       startLine: lineNumber,
-      endLine: findBlockEnd(lines, index),
+      endLine,
       exported,
     });
+    containerRanges.push({ kind: "object", name, startIndex: index, endIndex: endLine - 1, exported });
   });
+
+  for (const container of containerRanges) {
+    analyzeFrontendContainerMethods(fileId, repoPath, lines, container);
+  }
 
   exportedNamesByFile.set(fileId, exportedNames);
 
@@ -269,6 +300,48 @@ function analyzeFrontendFile(fileId, repoPath, lines) {
   });
 }
 
+function analyzeFrontendContainerMethods(fileId, repoPath, lines, container) {
+  for (let index = container.startIndex + 1; index < container.endIndex; index += 1) {
+    const line = lines[index];
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("*")) continue;
+    if (/^(if|for|while|switch|catch|function|return|else)\b/.test(trimmed)) continue;
+
+    const methodMatch = frontendMethodMatch(trimmed, container.kind);
+    if (!methodMatch) continue;
+    const name = methodMatch.name;
+    if (!name || name === "constructor") continue;
+    addSymbol({
+      kind: "method",
+      name,
+      signature: trimSignature(line),
+      language: languageFor(repoPath),
+      fileId,
+      repoPath,
+      startLine: index + 1,
+      endLine: findBlockEnd(lines, index),
+      exported: container.exported,
+      containerName: container.name,
+      qualifiedName: `${container.name}.${name}`,
+    });
+  }
+}
+
+function frontendMethodMatch(trimmed, containerKind) {
+  const prefix = String.raw`(?:(?:public|private|protected|static|readonly|override|abstract|async|get|set)\s+)*`;
+  const identifier = String.raw`([A-Za-z_$][\w$]*)`;
+  let match = trimmed.match(new RegExp(`^${prefix}${identifier}\\s*(?:<[^>]+>)?\\s*\\([^)]*\\)\\s*(?::[^=;{]+)?\\s*\\{?`));
+  if (match) return { name: match[1] };
+
+  if (containerKind === "object") {
+    match = trimmed.match(new RegExp(`^${identifier}\\s*:\\s*(?:async\\s*)?(?:\\([^)]*\\)|[A-Za-z_$][\\w$]*)\\s*=>`));
+    if (match) return { name: match[1] };
+    match = trimmed.match(new RegExp(`^${identifier}\\s*:\\s*(?:async\\s*)?function\\b`));
+    if (match) return { name: match[1] };
+  }
+  return null;
+}
+
 function isFrontendDeclarationName(line, name, index) {
   const before = line.slice(0, index + name.length);
   const declarationPatterns = [
@@ -316,8 +389,9 @@ function analyzeRustFile(fileId, repoPath, lines) {
     if (fnMatch) {
       const previous = previousMeaningfulLine(lines, index);
       const tauriCommand = previous.includes("#[tauri::command]");
+      const containerName = rustImplContainerAt(lines, index);
       addSymbol({
-        kind: tauriCommand ? "tauri-command" : "function",
+        kind: containerName ? "method" : tauriCommand ? "tauri-command" : "function",
         name: fnMatch[3],
         signature: trimSignature(line),
         language: "rust",
@@ -326,6 +400,8 @@ function analyzeRustFile(fileId, repoPath, lines) {
         startLine: lineNumber,
         endLine: findBlockEnd(lines, index),
         exported: Boolean(fnMatch[1]),
+        containerName,
+        qualifiedName: containerName ? `${containerName}::${fnMatch[3]}` : null,
       });
     }
   });
@@ -379,6 +455,17 @@ function rustCallContext(line, index, callee) {
     method: false,
     path: pathMatch ? `${pathMatch[1]}::${callee}` : null,
   };
+}
+
+function rustImplContainerAt(lines, targetIndex) {
+  for (let index = targetIndex - 1; index >= 0; index -= 1) {
+    const line = lines[index];
+    const implMatch = line.match(/^\s*impl(?:\s*<[^>]+>)?\s+([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)?)/);
+    if (!implMatch) continue;
+    const endLine = findBlockEnd(lines, index);
+    if (targetIndex + 1 <= endLine) return implMatch[1].split("::").pop();
+  }
+  return null;
 }
 
 function loadCommandNames() {
@@ -462,8 +549,11 @@ function addSymbol(input) {
     range: range(input.repoPath, input.startLine, input.endLine),
     exported: input.exported,
   };
+  if (input.containerName) symbol.containerName = input.containerName;
+  if (input.qualifiedName) symbol.qualifiedName = input.qualifiedName;
   symbols.push(symbol);
   symbolByFileAndName.set(`${input.fileId}:${input.name}`, symbol);
+  if (input.qualifiedName) symbolByFileAndName.set(`${input.fileId}:${input.qualifiedName}`, symbol);
 }
 
 function resolveImportTargets() {

@@ -117,6 +117,10 @@
     return direction === 'incoming' ? 'Incoming' : 'Outgoing';
   }
 
+  function stepReferenceMode(flowId) {
+    return flowId === currentFlow.id ? 'step-only' : 'full';
+  }
+
   function buildBoardProjection(flow) {
     const crossEdges = crossFunctionEdgesForFlow(flow.id);
     const rows = [];
@@ -355,21 +359,61 @@
     return codebaseGraph?.files?.find((file) => file.id === fileId) ?? null;
   }
 
+  function codebaseFileByRepoPath(repoPath) {
+    return codebaseGraph?.files?.find((file) => file.repoPath === repoPath) ?? null;
+  }
+
   function graphSymbolsForStep(step) {
     if (!codebaseGraph?.symbols?.length || !step) return [];
-    const callName = String(step.call || step.code || '').match(/[A-Za-z_$][\w$]*/)?.[0];
-    if (!callName) return [];
+    const tokens = callReferenceTokens(step);
     return codebaseGraph.symbols
-      .filter((symbol) => symbol.name === callName || symbol.signature?.includes(callName))
-      .slice(0, 4);
+      .filter((symbol) => symbol.repoPath === step.source)
+      .map((symbol) => ({ symbol, score: stepSymbolScore(symbol, tokens) }))
+      .filter((result) => result.score > 0)
+      .sort((a, b) => b.score - a.score || (a.symbol.range?.startLine ?? 0) - (b.symbol.range?.startLine ?? 0))
+      .slice(0, 4)
+      .map((result) => result.symbol);
   }
 
   function sourceReference(step) {
     const symbol = graphSymbolsForStep(step)[0];
+    const file = codebaseFileByRepoPath(step?.source ?? '');
+    const line = symbol?.range?.startLine;
     return {
       label: step?.source ?? '',
-      url: symbol?.range?.githubUrl ?? null
+      url: symbol?.range?.githubUrl ?? file?.githubUrl ?? null,
+      repoPath: symbol?.repoPath ?? file?.repoPath ?? step?.source ?? '',
+      line: line ?? 1
     };
+  }
+
+  function callReferenceTokens(step) {
+    const text = String(step?.call || step?.code || '');
+    const identifiers = [...text.matchAll(/[A-Za-z_$][\w$]*/g)].map((match) => match[0]);
+    const qualified = [...text.matchAll(/[A-Za-z_$][\w$]*(?:(?:\.|::)[A-Za-z_$][\w$]*)+/g)]
+      .map((match) => match[0]);
+    const last = qualified.length
+      ? qualified.at(-1).split(/\.|::/).at(-1)
+      : identifiers.at(-1);
+    return {
+      identifiers,
+      identifierSet: new Set(identifiers),
+      qualified,
+      qualifiedSet: new Set(qualified),
+      last
+    };
+  }
+
+  function stepSymbolScore(symbol, tokens) {
+    if (symbol.kind === 'module') return 0;
+    if (!tokens.identifiers.length && !tokens.qualified.length) return 0;
+    if (symbol.qualifiedName && tokens.qualifiedSet.has(symbol.qualifiedName)) return 160;
+    if (symbol.qualifiedName && tokens.qualifiedSet.has(symbol.qualifiedName.replace(/::/g, '.'))) return 155;
+    if (tokens.last && symbol.name === tokens.last) return 140;
+    if (tokens.identifierSet.has(symbol.name)) return 120;
+    if (symbol.containerName && tokens.identifierSet.has(symbol.containerName)) return 80;
+    if (tokens.identifiers.some((token) => String(symbol.signature || '').includes(token))) return 35;
+    return symbol.kind === 'module' ? 1 : 0;
   }
 
   function symbolLocationLabel(symbol) {
@@ -646,8 +690,9 @@
                       {@const targetFlowId = relationTarget(relation, 'incoming')}
                       <button class="flow-link-card" type="button" style={`--relation-color:${kind.color}`} onclick={() => selectFlowStep(targetFlowId)}>
                         <span class="flow-link-role" title="Incoming link" aria-label="Incoming link">{@render DirectionIcon('incoming')}</span>
-                        <span class="flow-link-title">{flowById(targetFlowId)?.title ?? targetFlowId}</span>
-                        <span class="flow-link-route">{flowById(relation.fromFlow)?.title ?? relation.fromFlow} -&gt; {flowById(relation.toFlow)?.title ?? relation.toFlow}</span>
+                        {#if targetFlowId !== currentFlow.id}
+                          <span class="flow-link-target">{@render FlowReference(targetFlowId, 'small')}</span>
+                        {/if}
                         <span class="flow-link-meta"><span>{relation.from} -&gt; {relation.to}</span><span class="flow-link-kind">{kind.label}</span></span>
                         <code class="flow-link-via">via {relation.via}</code>
                         <span class="flow-link-copy">{relation.description}</span>
@@ -685,8 +730,9 @@
                       {@const targetFlowId = relationTarget(relation, 'outgoing')}
                       <button class="flow-link-card" type="button" style={`--relation-color:${kind.color}`} onclick={() => selectFlowStep(targetFlowId)}>
                         <span class="flow-link-role" title="Outgoing link" aria-label="Outgoing link">{@render DirectionIcon('outgoing')}</span>
-                        <span class="flow-link-title">{flowById(targetFlowId)?.title ?? targetFlowId}</span>
-                        <span class="flow-link-route">{flowById(relation.fromFlow)?.title ?? relation.fromFlow} -&gt; {flowById(relation.toFlow)?.title ?? relation.toFlow}</span>
+                        {#if targetFlowId !== currentFlow.id}
+                          <span class="flow-link-target">{@render FlowReference(targetFlowId, 'small')}</span>
+                        {/if}
                         <span class="flow-link-meta"><span>{relation.from} -&gt; {relation.to}</span><span class="flow-link-kind">{kind.label}</span></span>
                         <code class="flow-link-via">via {relation.via}</code>
                         <span class="flow-link-copy">{relation.description}</span>
@@ -737,7 +783,7 @@
                         {@render DirectionIcon(node.role)}
                       {/if}
                     </span>
-                    {@render FlowStepReference(node.flowId, node.stepId, 'compact')}
+                    {@render FlowStepReference(node.flowId, node.stepId, 'compact', node.role === 'current' ? 'step-title' : 'full')}
                   </div>
                   <code class="node-code">{node.step.code}</code>
                 </button>
@@ -835,7 +881,7 @@
                         <span class="flow-step-separator">/</span>
                         <code class="inline-code">{item.edge.effect}</code>
                       </span>
-                      {@render FlowStepReference(target.flowId, target.stepId, 'detail')}
+                      {@render FlowStepReference(target.flowId, target.stepId, 'detail', stepReferenceMode(target.flowId))}
                       <span>{ref.label}</span>
                     </button>
                   {:else}
@@ -887,22 +933,45 @@
   </svg>
 {/snippet}
 
-{#snippet FlowStepReference(flowId, stepId, variant)}
+{#snippet FlowReference(flowId, variant)}
   {@const flow = flowById(flowId)}
-  {@const step = stepById(flowId, stepId)}
-  {#if flow && step}
-    <span class:compact={variant === 'compact'} class:detail={variant === 'detail'} class:small={variant === 'small'} class="flow-step-ref">
+  {#if flow}
+    <span class:compact={variant === 'compact'} class:detail={variant === 'detail'} class:small={variant === 'small'} class="flow-step-ref flowOnly">
       <span class="flow-step-segment flow-segment">
         <span class="flow-step-number">{flowNumberLabel(flowId)}</span>
         <span>{flow.title}</span>
       </span>
-      <span class="flow-step-segment step-segment">
-        <span class="flow-step-number">{stepNumberLabel(flowId, stepId)}</span>
-        <span>{step.title}</span>
-      </span>
     </span>
   {:else}
-    <span class="flow-step-ref missing">{stepLabel(flowId, stepId)}</span>
+    <span class="flow-step-ref missing">{flowId}</span>
+  {/if}
+{/snippet}
+
+{#snippet FlowStepReference(flowId, stepId, variant, mode)}
+  {@const flow = flowById(flowId)}
+  {@const step = stepById(flowId, stepId)}
+  {@const showFlow = mode === 'full' || mode === 'flow-only'}
+  {@const showStep = mode !== 'flow-only'}
+  {@const showStepNumber = mode !== 'step-title'}
+  {#if flow && (showStep ? step : true)}
+    <span class:compact={variant === 'compact'} class:detail={variant === 'detail'} class:small={variant === 'small'} class:flowOnly={!showStep} class:stepOnly={!showFlow} class="flow-step-ref">
+      {#if showFlow}
+        <span class="flow-step-segment flow-segment">
+          <span class="flow-step-number">{flowNumberLabel(flowId)}</span>
+          <span>{flow.title}</span>
+        </span>
+      {/if}
+      {#if showStep && step}
+        <span class="flow-step-segment step-segment">
+          {#if showStepNumber}
+            <span class="flow-step-number">{stepNumberLabel(flowId, stepId)}</span>
+          {/if}
+          <span>{step.title}</span>
+        </span>
+      {/if}
+    </span>
+  {:else}
+    <span class="flow-step-ref missing">{showStep ? stepLabel(flowId, stepId) : flowId}</span>
   {/if}
 {/snippet}
 
@@ -931,9 +1000,7 @@
               <code class="inline-code">{edge.effect}</code>
             </span>
             <span class="function-edge-source">
-              {@render FlowStepReference(edge.fromFlow, edge.fromStep, 'small')}
-              <span class="code-arrow">-&gt;</span>
-              {@render FlowStepReference(edge.toFlow, edge.toStep, 'small')}
+              {@render FlowStepReference(target.flowId, target.stepId, 'small', stepReferenceMode(target.flowId))}
             </span>
           </button>
         {/each}

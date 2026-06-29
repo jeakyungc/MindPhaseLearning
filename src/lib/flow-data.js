@@ -18,7 +18,7 @@ const FLOW_SPECS = [
   { id: 'frontend-composition', group: 'App Lifecycle', title: 'Frontend Application Composition', summary: 'The page composition root wires application facades, feature services, clients, and command transport.', trigger: 'Page services are created', result: 'Page runtime receives application service functions', tags: ['composition', 'facade', 'transport'], refs: [
     ['page', 'Create route services', 'createPageRouteServices', 'src/lib/page/page-route-runtime-wiring.ts'],
     ['feature', 'Create app facade', 'createMindPhaseApp', 'src/lib/app/mindphase-app.ts'],
-    ['ipc', 'Create command transport', 'TauriCommandTransport', 'src/lib/services/TauriCommandTransport.ts'],
+    ['ipc', 'Create command transport', 'TauriCommandTransport', 'src/lib/shared/ipc/TauriCommandTransport.ts'],
     ['feature', 'Wire workspace feature', 'WorkspaceFeature', 'src/lib/features/workspace/WorkspaceFeature.ts'],
     ['feature', 'Return page service API', 'createPageRouteServices', 'src/lib/page/page-route-runtime-wiring.ts'],
   ] },
@@ -60,7 +60,7 @@ const FLOW_SPECS = [
   { id: 'document-open', group: 'Document & Editor', title: 'Document Open', summary: 'Opening a row or graph node reads document content and creates or activates an editor session.', trigger: 'Workspace item open action', result: 'Selected document is visible in the editor', tags: ['document', 'editor', 'open'], refs: [
     ['entry', 'Receive open action', 'handleWorkspaceRowClick', 'src/lib/page/workspace-interaction-runtime.ts'],
     ['feature', 'Read document service', 'DocumentFeature', 'src/lib/features/documents/DocumentFeature.ts'],
-    ['ipc', 'Invoke read command', 'readDocument', 'src/lib/services/document-service.ts'],
+    ['ipc', 'Invoke read command', 'readDocument', 'src/lib/editor/MarkdownDocumentService.ts'],
     ['rust', 'Read document backend', 'read_document', 'src-tauri/src/commands/index_commands.rs'],
     ['page', 'Open editor session', 'openWorkspaceFile', 'src/lib/page/workspace-file-open-actions.ts'],
   ] },
@@ -68,13 +68,13 @@ const FLOW_SPECS = [
     ['entry', 'Request draft save', 'saveEditorDraft', 'src/lib/page/editor-draft-save-actions.ts'],
     ['page', 'Prepare save payload', 'saveEditorDraft', 'src/lib/page/editor-draft-save-actions.ts'],
     ['feature', 'Call document save', 'DocumentFeature', 'src/lib/features/documents/DocumentFeature.ts'],
-    ['ipc', 'Invoke save command', 'saveDocument', 'src/lib/services/document-service.ts'],
+    ['ipc', 'Invoke save command', 'saveDocument', 'src/lib/editor/MarkdownDocumentService.ts'],
     ['rust', 'Persist document', 'save_document', 'src-tauri/src/commands/index_commands.rs'],
   ] },
   { id: 'document-media-bytes', group: 'Document & Editor', title: 'Document Bytes & Media Resolve', summary: 'Document media helpers resolve workspace-relative media references and read binary document bytes.', trigger: 'Preview or attachment request', result: 'Binary content or resolved media path is returned', tags: ['bytes', 'media', 'preview'], refs: [
     ['entry', 'Request media content', 'resolveDocumentMedia', 'src/lib/page/page-route-runtime-wiring.ts'],
-    ['feature', 'Use document service', 'MarkdownDocumentService', 'src/lib/features/documents/MarkdownDocumentService.ts'],
-    ['ipc', 'Invoke media command', 'resolveDocumentMedia', 'src/lib/services/document-service.ts'],
+    ['feature', 'Use document service', 'MarkdownDocumentService', 'src/lib/editor/MarkdownDocumentService.ts'],
+    ['ipc', 'Invoke media command', 'resolveDocumentMedia', 'src/lib/editor/MarkdownDocumentService.ts'],
     ['rust', 'Resolve media path', 'document_command_service', 'src-tauri/src/application/document_command_service.rs'],
     ['infra', 'Read file bytes', 'read', 'src-tauri/src/application/document_text_service.rs'],
   ] },
@@ -158,14 +158,14 @@ const FLOW_SPECS = [
   { id: 'zoom', group: 'Settings', title: 'App Zoom Load & Change', summary: 'Zoom settings load from durable preferences, update UI optimistically, and persist through backend commands.', trigger: 'Zoom setting load or user change', result: 'Webview zoom and stored preference are updated', tags: ['settings', 'zoom', 'preference'], refs: [
     ['page', 'Load zoom controller', 'load', 'src/lib/page/controllers/app-zoom-controller.svelte.ts'],
     ['feature', 'Call zoom feature', 'AppZoomFeature', 'src/lib/features/settings/AppZoomFeature.ts'],
-    ['ipc', 'Invoke zoom command', 'app_zoom', 'src/lib/services/settings-service.ts'],
+    ['ipc', 'Invoke zoom command', 'AppZoomClient', 'src/lib/services/app-zoom-service.ts'],
     ['rust', 'Persist zoom setting', 'app_zoom_commands', 'src-tauri/src/commands/app_zoom_commands.rs'],
     ['page', 'Apply zoom state', 'appZoom', 'src/lib/page/app-zoom.ts'],
   ] },
   { id: 'theme', group: 'Settings', title: 'Built-in Community Workspace Theme', summary: 'Theme selection merges built-in, community, and workspace CSS sources and applies them to the route.', trigger: 'Theme load or selection change', result: 'Active theme CSS is loaded', tags: ['theme', 'community', 'workspace'], refs: [
     ['page', 'Load theme controller', 'load', 'src/lib/page/controllers/app-theme-controller.svelte.ts'],
     ['feature', 'Load theme options', 'AppThemeFeature', 'src/lib/features/settings/AppThemeFeature.ts'],
-    ['ipc', 'Invoke theme command', 'theme_commands', 'src/lib/services/settings-service.ts'],
+    ['ipc', 'Invoke theme command', 'AppThemeClient', 'src/lib/services/app-theme-service.ts'],
     ['rust', 'Read theme service', 'theme_service', 'src-tauri/src/application/theme_service.rs'],
     ['page', 'Apply theme CSS', 'markdown-editor-theme', 'src/lib/editor/markdown-editor-theme.ts'],
   ] },
@@ -207,7 +207,7 @@ const FLOW_SPECS = [
   { id: 'pdf-annotations', group: 'Extensions', title: 'PDF Annotation Import Export Local Snapshot', summary: 'PDF annotation actions inspect backend capabilities, import or export annotation data, and persist local snapshots.', trigger: 'PDF viewer annotation action', result: 'Annotation state is imported, exported, or saved', tags: ['PDF', 'annotations', 'snapshot'], refs: [
     ['entry', 'Request annotation action', 'PdfDocumentService', 'src/lib/editor/PdfDocumentService.ts'],
     ['page', 'Check backend capabilities', 'getPdfAnnotationBackendCapabilities', 'src/lib/editor/PdfDocumentService.ts'],
-    ['ipc', 'Invoke PDF command', 'pdf_annotation_commands', 'src/lib/services/pdf-annotation-service.ts'],
+    ['ipc', 'Invoke PDF command', 'getPdfAnnotationBackendCapabilities', 'src/lib/editor/PdfDocumentService.ts'],
     ['rust', 'Process PDF annotations', 'pdf_annotation_commands', 'src-tauri/src/commands/pdf_annotation_commands.rs'],
     ['infra', 'Transform PDF data', 'pdf_annotation_export_policy', 'src-tauri/src/application/pdf_annotation_export_policy.rs'],
   ] },
@@ -428,5 +428,4 @@ export const FUNCTION_EDGES = [
   ...buildSequentialFunctionEdges(),
   ...CROSS_FUNCTION_EDGES.map(normalizeFunctionEdge),
 ];
-
 

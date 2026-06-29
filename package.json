@@ -6,6 +6,7 @@
   "scripts": {
     "analyze": "node scripts/analyze-mindphase.cjs",
     "validate": "node scripts/validate-graph.cjs",
+    "validate:links": "node scripts/validate-flow-source-links.cjs",
     "dev": "vite dev --host 127.0.0.1",
     "dev:legacy": "node scripts/dev-server.cjs",
     "check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",

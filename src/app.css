@@ -417,6 +417,7 @@
       width: fit-content;
       display: inline-flex;
       align-items: center;
+      line-height: 1;
       color: var(--relation-color);
       font-size: 9px;
       font-weight: 850;
@@ -495,6 +496,7 @@
       align-items: center;
       gap: 6px;
       min-width: 0;
+      line-height: 1;
     }
 
     .function-edge-list {
@@ -887,6 +889,7 @@
       display: flex;
       align-items: center;
       gap: 5px;
+      line-height: 1;
     }
 
     .legend-dot {
@@ -907,6 +910,7 @@
       width: 15px;
       height: 15px;
       flex: 0 0 auto;
+      display: block;
       fill: none;
       stroke: currentColor;
       stroke-linecap: round;
@@ -1080,6 +1084,10 @@
         filter 260ms ease;
     }
 
+    .step-node > * {
+      min-width: 0;
+    }
+
     .step-node.context-node {
       min-height: 68px;
       border-style: dashed;
@@ -1145,22 +1153,24 @@
     }
 
     .node-topline {
-      display: flex;
+      display: grid;
+      grid-template-columns: 26px minmax(0, 1fr);
       align-items: center;
       gap: 7px;
       margin-bottom: 7px;
     }
 
     .node-seq {
-      width: 22px;
-      height: 22px;
+      width: 26px;
+      height: 26px;
       display: grid;
       place-items: center;
-      border-radius: 7px;
+      border-radius: 10px;
       color: var(--muted);
       background: rgba(255, 255, 255, 0.06);
       font-size: 9px;
       font-weight: 850;
+      line-height: 1;
     }
 
     .node-seq .direction-icon {
@@ -1175,17 +1185,22 @@
 
     .flow-step-ref {
       min-width: 0;
-      display: inline-flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 4px;
+      display: inline-grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      align-items: stretch;
+      overflow: hidden;
+      border: 1px solid rgba(151, 166, 207, 0.17);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
       color: #cbd5eb;
       line-height: 1.35;
     }
 
     .flow-step-ref.compact {
-      flex: 1 1 auto;
-      max-width: calc(100% - 29px);
+      width: 100%;
+      max-width: 100%;
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+      white-space: nowrap;
     }
 
     .flow-step-ref.detail,
@@ -1193,35 +1208,31 @@
       width: 100%;
     }
 
-    .flow-step-pill {
+    .flow-step-segment {
       min-width: 0;
       display: inline-flex;
       align-items: center;
       gap: 5px;
       max-width: 100%;
-      padding: 3px 7px;
-      border: 1px solid rgba(151, 166, 207, 0.16);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.045);
+      padding: 4px 8px;
       overflow: hidden;
     }
 
-    .flow-step-pill span:last-child {
+    .flow-step-segment span:last-child {
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .flow-pill {
+    .flow-segment {
       color: #dce6ff;
-      border-color: rgba(127, 140, 255, 0.26);
       background: rgba(127, 140, 255, 0.09);
     }
 
-    .step-pill {
+    .step-segment {
       color: #d7f5ef;
-      border-color: rgba(75, 214, 200, 0.24);
+      border-left: 1px solid rgba(151, 166, 207, 0.18);
       background: rgba(75, 214, 200, 0.075);
     }
 
@@ -1234,19 +1245,26 @@
       font-variant-numeric: tabular-nums;
     }
 
-    .flow-step-ref.compact .flow-step-pill {
+    .flow-step-ref.compact .flow-step-segment {
       max-width: 100%;
-      padding: 2px 6px;
+      padding: 3px 7px;
       font-size: 8px;
     }
 
-    .flow-step-ref.detail .flow-step-pill,
-    .flow-step-ref.small .flow-step-pill {
+    .flow-step-ref.detail .flow-step-segment,
+    .flow-step-ref.small .flow-step-segment {
       font-size: 8px;
     }
 
-    .flow-step-separator,
     .code-arrow {
+      flex: 0 0 auto;
+      color: #71809e;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 8px;
+      font-weight: 800;
+    }
+
+    .flow-step-separator {
       flex: 0 0 auto;
       color: #71809e;
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
@@ -1443,11 +1461,11 @@
       line-height: 1.45;
     }
 
-    .detail-edge-card .flow-pill {
+    .detail-edge-card .flow-segment {
       color: #dce6ff;
     }
 
-    .detail-edge-card .step-pill {
+    .detail-edge-card .step-segment {
       color: #d7f5ef;
     }
 

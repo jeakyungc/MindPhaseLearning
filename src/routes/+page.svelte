@@ -878,11 +878,11 @@
 {#snippet DirectionIcon(direction)}
   <svg class:incoming={direction === 'incoming'} class:outgoing={direction === 'outgoing'} class="direction-icon" viewBox="0 0 24 24" aria-hidden="true">
     {#if direction === 'incoming'}
-      <path d="M5 7h8a6 6 0 0 1 6 6v4" />
-      <path d="m13 13 6 6 6-6" transform="translate(-6 -2)" />
+      <path d="M20 7h-8a6 6 0 0 0-6 6v5" />
+      <path d="m10 14-4 4-4-4" />
     {:else}
-      <path d="M5 17v-4a6 6 0 0 1 6-6h8" />
-      <path d="m13 5 6 6-6 6" />
+      <path d="M4 17h8a6 6 0 0 0 6-6V6" />
+      <path d="m14 10 4-4 4 4" />
     {/if}
   </svg>
 {/snippet}
@@ -892,12 +892,11 @@
   {@const step = stepById(flowId, stepId)}
   {#if flow && step}
     <span class:compact={variant === 'compact'} class:detail={variant === 'detail'} class:small={variant === 'small'} class="flow-step-ref">
-      <span class="flow-step-pill flow-pill">
+      <span class="flow-step-segment flow-segment">
         <span class="flow-step-number">{flowNumberLabel(flowId)}</span>
         <span>{flow.title}</span>
       </span>
-      <span class="flow-step-separator">/</span>
-      <span class="flow-step-pill step-pill">
+      <span class="flow-step-segment step-segment">
         <span class="flow-step-number">{stepNumberLabel(flowId, stepId)}</span>
         <span>{step.title}</span>
       </span>
